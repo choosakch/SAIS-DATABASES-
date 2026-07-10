@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>SAIS DATABASE 2026</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <style>
+    .custom-scrollbar::-webkit-scrollbar { width: 4px; height: 4px; }
+    .custom-scrollbar::-webkit-scrollbar-track { background: #f9fafb; }
+    .custom-scrollbar::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 10px; }
+    .pb-safe { padding-bottom: calc(env(safe-area-inset-bottom) + 1rem); }
+    .sticky-header th { position: sticky; top: 0; z-index: 20; background: #f3f4f6; box-shadow: 0 1px 0 #e5e7eb; }
+    .sticky-col { position: sticky; left: 0; z-index: 15; background: inherit; border-right: 1px solid #e5e7eb; }
+    .sticky-right-status { position: sticky; right: 0; z-index: 15; background: inherit; border-left: 1px solid #e5e7eb; }
+    .sticky-right-status-header { position: sticky; right: 0; z-index: 25 !important; background: #f3f4f6 !important; box-shadow: -1px 0 0 #e5e7eb; }
+  </style>
+</head>
+<body class="bg-[#F4F4F4] text-gray-800 font-sans overflow-x-hidden">
+<div id="root"></div>
+<script type="text/babel" data-type="module">
+  import React, { useState, useMemo, useEffect, useCallback } from 'https://esm.sh/react@18.2.0';
+  import { createRoot } from 'https://esm.sh/react-dom@18.2.0/client';
+  import { Save, Plus, Trash2, FileSpreadsheet, Building2, ChevronRight, ChevronLeft, AlertCircle, X, Edit, ClipboardList, Clock, CheckCircle2, AlertTriangle, RefreshCw, Cloud, CloudOff, BarChart2, Filter, RotateCcw, Activity, ShieldAlert, Target, Award, Eye, MessageSquare, Search, History, Settings, UserPlus } from 'https://esm.sh/lucide-react@0.300.0';
+
+  const GAS_WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbyvVssxbmdOnE5wypreTNxi9eYnDpkgXWO5grTMU1LklyuP7LwmON_X4YdZumxgS5uX/exec';
+  const INSPECTORS = ["Thongchai Chalothornnarumit", "Prayod Yoprakhon", "Choosak Choomuang", "Pradit Mingson", "Teeratat Piyasakaksorn", "Matee Khanti", "Narong Robrum", "Chakrin Dangwichai"];
+  const PRODUCT_LINES = ["3300", "5500", "7000", "ES1", "ES2", "ES3", "ES5.0", "ES5", "ESC", "MW", "S-Villa", "Flex-7"];
+  const SAIS_STATUSES = ["Passed with Completed", "Passed with OIL", "Failed", "Close OIL", "ยกเลิก"];
+  
+  const formatDate = (d) => { const date = new Date(d); return isNaN(date.getTime()) ? '-' : `${String(date.getDate()).padStart(2,'0')}/${String(date.getMonth()+1).padStart(2,'0')}/${String(date.getFullYear()).slice(-2)}`; };
+  const parseRemarkHistory = (str) => { try { const p = JSON.parse(str); return Array.isArray(p) ? p : [{ version: '0', text: str, date: '-', author: 'System' }]; } catch(e) { return str ? [{ version: '0', text: str, date: '-', author: 'System' }] : []; } };
+
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>SAIS DATABASE 2026</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <style>
+    .custom-scrollbar::-webkit-scrollbar { width: 4px; height: 4px; }
+    .custom-scrollbar::-webkit-scrollbar-track { background: #f9fafb; }
+    .custom-scrollbar::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 10px; }
+    .pb-safe { padding-bottom: calc(env(safe-area-inset-bottom) + 1rem); }
+    .sticky-header th { position: sticky; top: 0; z-index: 20; background: #f3f4f6; box-shadow: 0 1px 0 #e5e7eb; }
+    .sticky-col { position: sticky; left: 0; z-index: 15; background: inherit; border-right: 1px solid #e5e7eb; }
+    .sticky-right-status { position: sticky; right: 0; z-index: 15; background: inherit; border-left: 1px solid #e5e7eb; }
+    .sticky-right-status-header { position: sticky; right: 0; z-index: 25 !important; background: #f3f4f6 !important; box-shadow: -1px 0 0 #e5e7eb; }
+  </style>
+</head>
+<body class="bg-[#F4F4F4] text-gray-800 font-sans overflow-x-hidden">
+<div id="root"></div>
+<script type="text/babel" data-type="module">
+  import React, { useState, useMemo, useEffect, useCallback } from 'https://esm.sh/react@18.2.0';
+  import { createRoot } from 'https://esm.sh/react-dom@18.2.0/client';
+  import { Save, Plus, Trash2, FileSpreadsheet, Building2, ChevronRight, ChevronLeft, AlertCircle, X, Edit, ClipboardList, Clock, CheckCircle2, AlertTriangle, RefreshCw, Cloud, CloudOff, BarChart2, Filter, RotateCcw, Activity, ShieldAlert, Target, Award, Eye, MessageSquare, Search, History, Settings, UserPlus } from 'https://esm.sh/lucide-react@0.300.0';
+
+  const GAS_WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbyvVssxbmdOnE5wypreTNxi9eYnDpkgXWO5grTMU1LklyuP7LwmON_X4YdZumxgS5uX/exec';
+  const INSPECTORS = ["Thongchai Chalothornnarumit", "Prayod Yoprakhon", "Choosak Choomuang", "Pradit Mingson", "Teeratat Piyasakaksorn", "Matee Khanti", "Narong Robrum", "Chakrin Dangwichai"];
+  const PRODUCT_LINES = ["3300", "5500", "7000", "ES1", "ES2", "ES3", "ES5.0", "ES5", "ESC", "MW", "S-Villa", "Flex-7"];
+  const SAIS_STATUSES = ["Passed with Completed", "Passed with OIL", "Failed", "Close OIL", "ยกเลิก"];
+  
+  const formatDate = (d) => { const date = new Date(d); return isNaN(date.getTime()) ? '-' : `${String(date.getDate()).padStart(2,'0')}/${String(date.getMonth()+1).padStart(2,'0')}/${String(date.getFullYear()).slice(-2)}`; };
+  const parseRemarkHistory = (str) => { try { const p = JSON.parse(str); return Array.isArray(p) ? p : [{ version: '0', text: str, date: '-', author: 'System' }]; } catch(e) { return str ? [{ version: '0', text: str, date: '-', author: 'System' }] : []; } };
+  function App() {
+    const [records, setRecords] = useState([]);
+    const [activeTab, setActiveTab] = useState('pending');
+    const [currentPage, setCurrentPage] = useState(1);
+    const [searchTerm, setSearchTerm] = useState('');
+    const [isModalOpen, setIsModalOpen] = useState(false);
+    const [editId, setEditId] = useState(null);
+    const [viewRecord, setViewRecord] = useState(null);
+    const [formData, setFormData] = useState({});
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [syncStatus, setSyncStatus] = useState('idle');
+
+    const fetchRecords = useCallback(async () => {
+      setSyncStatus('syncing');
+      try {
+        const res = await fetch(GAS_WEB_APP_URL);
+        const data = await res.json();
+        setRecords(Array.isArray(data) ? data.filter(i => i.id) : []);
+        setSyncStatus('success');
+      } catch (e) { setSyncStatus('error'); }
+    }, []);
+
+    useEffect(() => { fetchRecords(); }, [fetchRecords]);
+
+    const displayed = useMemo(() => {
+      let filtered = records.filter(r => {
+        const v = r.version || '0';
+        const matchSearch = searchTerm ? (String(r.equipmentNo).includes(searchTerm) || String(r.jobSite).includes(searchTerm)) : true;
+        if (activeTab === 'pending') return v === '0' && matchSearch;
+        if (activeTab === 'oil') return (v !== '0' || ['Passed with OIL', 'Failed', 'Close OIL'].includes(r.saisStatus)) && matchSearch;
+        return matchSearch;
+      });
+      return filtered.sort((a, b) => new Date(b.inspectionDate) - new Date(a.inspectionDate));
+    }, [records, activeTab, searchTerm]);
+
+    const paginated = useMemo(() => displayed.slice((currentPage-1)*30, currentPage*30), [displayed, currentPage]);
+
+    const handleSubmit = async (e) => {
+      e.preventDefault();
+      setIsSubmitting(true);
+      const hist = parseRemarkHistory(formData.remark);
+      if (formData.newRemark) hist.push({ version: formData.version, text: formData.newRemark, date: formatDate(new Date()), author: formData.inspectorName });
+      
+      const payload = { ...formData, remark: JSON.stringify(hist) };
+      delete payload.newRemark;
+      
+      const newRec = editId ? payload : { ...payload, id: generateUniqueId() };
+      setRecords(p => editId ? p.map(r => r.id === editId ? newRec : r) : [newRec, ...p]);
+      
+      await fetch(GAS_WEB_APP_URL, { method: 'POST', body: JSON.stringify({ action: 'SAVE', record: newRec }) });
+      setIsModalOpen(false); setIsSubmitting(false);
+    };
+    return (
+      <div className="min-h-screen pb-20">
+        <div className="p-4 bg-white shadow-sm flex justify-between items-center sticky top-0 z-30">
+          <h1 className="font-black text-lg">SAIS DATABASE 2026</h1>
+          <button onClick={() => { setFormData({}); setIsModalOpen(true); }} className="bg-red-600 text-white px-4 py-2 rounded-lg font-bold text-xs"><Plus className="w-4 h-4 inline"/> เพิ่มงาน</button>
+        </div>
+
+        <div className="p-4 overflow-x-auto custom-scrollbar">
+          <table className="w-full text-xs min-w-[800px]">
+            <thead>
+              <tr className="sticky-header">
+                <th className="p-3 border-r">No.</th>
+                <th className="p-3 border-r sticky-col bg-gray-200">Eq. No.</th>
+                <th className="p-3 border-r">Insp. Date</th>
+                <th className="p-3 border-r">Inspector</th>
+                <th className="p-3 border-r">Product</th>
+                <th className="p-3 border-r">Site</th>
+                <th className="p-3 border-r">Remark</th>
+                <th className="p-3 sticky-right-status-header">Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {paginated.map((r, i) => (
+                <tr key={r.id} onClick={() => setViewRecord(r)} className={`${r.saisStatus==='Failed'?'bg-red-50':r.saisStatus==='Passed with OIL'?'bg-amber-50':''} hover:bg-blue-100 cursor-pointer`}>
+                  <td className="p-3 border-r text-center">{(currentPage-1)*30 + i + 1}</td>
+                  <td className="p-3 border-r font-bold sticky-col">{r.equipmentNo}</td>
+                  <td className="p-3 border-r">{formatDate(r.inspectionDate)}</td>
+                  <td className="p-3 border-r">{r.inspectorName}</td>
+                  <td className="p-3 border-r">{r.productLine}</td>
+                  <td className="p-3 border-r truncate max-w-[100px]">{r.jobSite}</td>
+                  <td className="p-3 border-r truncate max-w-[100px]">{parseRemarkHistory(r.remark).slice(-1)[0]?.text || '-'}</td>
+                  <td className="p-3 text-center sticky-right-status font-bold">{r.saisStatus}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        {isModalOpen && (
+          <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+            <div className="bg-white w-full max-w-lg rounded-xl p-6 overflow-y-auto max-h-[90vh]">
+              <h2 className="font-bold mb-4">{editId ? 'แก้ไขงาน' : 'เพิ่มงาน'}</h2>
+              <form onSubmit={handleSubmit} className="space-y-4">
+                <input name="equipmentNo" placeholder="Eq No." value={formData.equipmentNo||''} onChange={handleInput} className="w-full border p-2 rounded" />
+                <input type="date" name="inspectionDate" value={formData.inspectionDate||''} onChange={handleInput} className="w-full border p-2 rounded" />
+                <select name="inspectorName" value={formData.inspectorName||''} onChange={handleInput} className="w-full border p-2 rounded">{INSPECTORS.map(i=><option key={i} value={i}>{i}</option>)}</select>
+                <input name="newRemark" placeholder="เพิ่มคอมเมนต์..." onChange={handleInput} className="w-full border p-2 rounded" />
+                <button type="submit" className="w-full bg-red-600 text-white p-2 rounded font-bold">บันทึก</button>
+              </form>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
+  createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>
