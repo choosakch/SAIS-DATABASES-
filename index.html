@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>SAIS DATABASE 2026</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <style>
+    ::-webkit-scrollbar { width: 5px; height: 5px; }
+    ::-webkit-scrollbar-track { background: #f9fafb; border-radius: 10px; }
+    ::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 10px; }
+    ::-webkit-scrollbar-thumb:hover { background: #E20015; }
+    .pb-safe { padding-bottom: calc(env(safe-area-inset-bottom) + 1rem); }
+    .fade-in { animation: fadeIn 0.4s ease-in-out; }
+    .slide-up { animation: slideUp 0.3s ease-out forwards; }
+    .toast-enter { animation: toastEnter 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards; }
+    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+    @keyframes slideUp { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+    @keyframes toastEnter { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+    .sticky-header th { position: sticky; top: 0; z-index: 10; background-color: #f3f4f6; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
+    .sticky-col { position: sticky; left: 0; z-index: 5; box-shadow: 2px 0 5px -2px rgba(0,0,0,0.1); background-color: white; }
+    .sticky-col-header { position: sticky; top: 0; left: 0; z-index: 15 !important; background-color: #e5e7eb !important; }
+  </style>
+</head>
+<body class="bg-[#F4F4F4] text-gray-800 antialiased overflow-x-hidden overscroll-y-contain font-sans">
+  <div id="root"></div>
+  <script type="text/babel" data-type="module">
+    import React, { useState, useMemo, useEffect, useCallback } from 'https://esm.sh/react@18.2.0';
+    import { createRoot } from 'https://esm.sh/react-dom@18.2.0/client';
+    import { Save, Plus, Trash2, FileSpreadsheet, Building2, ChevronRight, ChevronLeft, AlertCircle, X, Edit, ClipboardList, Clock, CheckCircle2, AlertTriangle, RefreshCw, Cloud, CloudOff, BarChart2, Filter, RotateCcw, Activity, ShieldAlert, Target, Award, Package, Eye, MessageSquare, Search, History } from 'https://esm.sh/lucide-react@0.300.0';
+
+    // 🔴 วาง URL ใหม่ของคุณแล้วที่นี่
+    const GAS_WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbyvVssxbmdOnE5wypreTNxi9eYnDpkgXWO5grTMU1LklyuP7LwmON_X4YdZumxgS5uX/exec';
+    
+    const INSPECTORS = ["Thongchai Chalothornnarumit", "Prayod Yoprakhon", "Choosak Choomuang", "Pradit Mingson", "Teeratat Piyasakaksorn", "Matee Khanti", "Narong Robrum", "Chakrin Dangwichai"];
+    const PRODUCT_LINES = ["3300", "5500", "7000", "ES1", "ES2", "ES3", "ES5.0", "ES5", "ESC", "MW", "S-Villa", "Flex-7"];
+    const TYPES = ["NI", "MOD-R", "MOD-T", "NI CNX", "NI HKT"];
+    const SAIS_STATUSES = ["Passed with Completed", "Passed with OIL", "Failed", "Close OIL", "ยกเลิก"];
+    const CONDITIONS = ["Final", "BUILDER LIFT", "TEMPORARY POWER SUPPLY"];
+    const MONTHS = [{ value: 'all', label: 'ทุกเดือนในระบบ' }, { value: '01', label: 'มกราคม' }, { value: '02', label: 'กุมภาพันธ์' }, { value: '03', label: 'มีนาคม' }, { value: '04', label: 'เมษายน' }, { value: '05', label: 'พฤษภาคม' }, { value: '06', label: 'มิถุนายน' }, { value: '07', label: 'กรกฎาคม' }, { value: '08', label: 'สิงหาคม' }, { value: '09', label: 'กันยายน' }, { value: '10', label: 'ตุลาคม' }, { value: '11', label: 'พฤศจิกายน' }, { value: '12', label: 'ธันวาคม' }];
+
+    const formatDateToDDMMYY = (d) => { if (!d) return '-'; const date = new Date(d); return isNaN(date.getTime()) ? '-' : `${String(date.getDate()).padStart(2, '0')}/${String(date.getMonth() + 1).padStart(2, '0')}/${String(date.getFullYear()).slice(-2)}`; };
+    const getMonthOnly = (d) => { if (!d) return ''; const date = new Date(d); return isNaN(date.getTime()) ? '' : String(date.getMonth() + 1).padStart(2, '0'); };
+    const formatSyncTime = (d) => d ? `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}` : '';
+    const calculateSLA = (d, status) => {
+      if (!d) return { text: '-', status: 'none' };
+      if (['Passed with Completed', 'Close OIL', 'ยกเลิก'].includes(status)) return { text: 'Closed', status: 'closed' };
+      if (!['Failed', 'Passed with OIL'].includes(status)) return { text: '-', status: 'none' };
+      const inspectDate = new Date(d); if (isNaN(inspectDate.getTime())) return { text: 'Invalid', status: 'none' };
+      const deadline = new Date(inspectDate); deadline.setDate(deadline.getDate() + (status === 'Failed' ? 7 : 28));
+      const today = new Date(); today.setHours(0,0,0,0); deadline.setHours(0,0,0,0);
+      const diff = Math.ceil((deadline - today) / (1000 * 60 * 60 * 24));
+      if (diff < 0) return { text: `Overdue ${Math.abs(diff)} วัน`, status: 'overdue', isOverdue: true };
+      if (diff === 0) return { text: `ครบกำหนดวันนี้`, status: 'warning', isOverdue: false };
+      return { text: `เหลือ ${diff} วัน`, status: 'pending', isOverdue: false };
+    };
+    const generateUniqueId = () => crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).substring(2);
+    const parseRemarkHistory = (str) => { try { const p = JSON.parse(str); return Array.isArray(p) ? p : [{ version: '0', text: str, date: '-', author: 'System' }]; } catch(e) { return str ? [{ version: '0', text: str, date: '-', author: 'System' }] : []; } };
+
+    function App() {
+      const [records, setRecords] = useState([]);
+      const [activeTab, setActiveTab] = useState('pending'); 
+      const [filterMonth, setFilterMonth] = useState('all');
+      const [searchTerm, setSearchTerm] = useState('');
+      const [dashFilters, setDashFilters] = useState({ inspector: 'all', product: 'all', type: 'all', condition: 'all', status: 'all', version: 'all' });
+      const [isModalOpen, setIsModalOpen] = useState(false);
+      const [editId, setEditId] = useState(null);
+      const [viewRecord, setViewRecord] = useState(null);
+      const [syncStatus, setSyncStatus] = useState('idle'); 
+      const [isSubmitting, setIsSubmitting] = useState(false);
+      const [lastSyncedAt, setLastSyncedAt] = useState(null); 
+      const [isNavVisible, setIsNavVisible] = useState(true);
+      const [lastScrollY, setLastScrollY] = useState(0);
+      const [currentPage, setCurrentPage] = useState(1);
+      const ITEMS_PER_PAGE = 30; 
+      const [toast, setToast] = useState(null);
+
+      const showToast = (message, type = 'success') => { setToast({ message, type }); setTimeout(() => setToast(null), 3000); };
+
+      const initialFormState = { equipmentNo: '', inspectionDate: '', generatedDate: '', generatedInSystem: '', inspectorName: '', productLine: '', type: '', jobSite: '', unit: '', preCheck: '', buzzer: '', saisStatus: '', condition: '', remark: '', newRemark: '', version: '0', versionDate: '' };
+      const [formData, setFormData] = useState(initialFormState);
+      const [validationError, setValidationError] = useState('');
+
+      const fetchRecords = useCallback(async (isSilent = false) => {
+        if (!isSilent) setSyncStatus('syncing');
+        try {
+          const res = await fetch(GAS_WEB_APP_URL); if (!res.ok) throw new Error('Net Error');
+          const data = await res.json();
+          if (Array.isArray(data)) { setRecords(data.filter(i => i.id && i.id.toString().trim() !== '')); setSyncStatus('success'); setLastSyncedAt(new Date()); } 
+          else { setRecords([]); setSyncStatus('idle'); }
+        } catch (e) { setSyncStatus('error'); if (!isSilent) showToast('เชื่อมต่อฐานข้อมูลล้มเหลว', 'error'); }
+      }, []);
+
+      useEffect(() => { fetchRecords(); }, [fetchRecords]);
+
+      useEffect(() => {
+        let startY = 0;
+        const ts = (e) => { if (window.scrollY === 0) startY = e.touches[0].clientY; };
+        const te = (e) => { if (window.scrollY === 0 && startY > 0 && e.changedTouches[0].clientY - startY > 100) { showToast('อัปเดตข้อมูล...', 'success'); fetchRecords(); } startY = 0; };
+        window.addEventListener('touchstart', ts, { passive: true }); window.addEventListener('touchend', te, { passive: true });
+        return () => { window.removeEventListener('touchstart', ts); window.removeEventListener('touchend', te); };
+      }, [fetchRecords]);
+
+      useEffect(() => {
+        const handleScroll = () => { setIsNavVisible(window.scrollY < lastScrollY || window.scrollY < 50); setLastScrollY(window.scrollY); };
+        window.addEventListener('scroll', handleScroll, { passive: true }); return () => window.removeEventListener('scroll', handleScroll);
+      }, [lastScrollY]);
+
+      useEffect(() => { setCurrentPage(1); }, [activeTab, filterMonth, searchTerm, dashFilters]);
+
+      const latestInspectionDate = useMemo(() => {
+        const sorted = [...records].sort((a, b) => new Date(b.inspectionDate || 0) - new Date(a.inspectionDate || 0)); return sorted[0]?.inspectionDate || '';
+      }, [records]);
+
+      const displayedRecords = useMemo(() => {
+        return records.filter(rec => {
+          if (filterMonth !== 'all' && getMonthOnly(rec.inspectionDate) !== filterMonth) return false;
+          if (searchTerm) { const s = searchTerm.toLowerCase(); if (!String(rec.equipmentNo||'').toLowerCase().includes(s) && !String(rec.jobSite||'').toLowerCase().includes(s)) return false; }
+          const v = rec.version || '0';
+          if (activeTab === 'pending') return v === '0';
+          if (activeTab === 'oil') return v !== '0' || ['Passed with OIL', 'Failed', 'Close OIL'].includes(rec.saisStatus);
+          return true;
+        }).sort((a, b) => new Date(b.inspectionDate || 0) - new Date(a.inspectionDate || 0) || parseInt(b.id || 0) - parseInt(a.id || 0));
+      }, [records, filterMonth, activeTab, searchTerm]);
+
+      const totalPages = Math.ceil(displayedRecords.length / ITEMS_PER_PAGE);
+      const paginatedRecords = useMemo(() => displayedRecords.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE), [displayedRecords, currentPage]);
+
+      const filteredDash = useMemo(() => records.filter(rec => {
+        if (filterMonth !== 'all' && getMonthOnly(rec.inspectionDate) !== filterMonth) return false;
+        if (dashFilters.inspector !== 'all' && rec.inspectorName !== dashFilters.inspector) return false;
+        if (dashFilters.product !== 'all' && rec.productLine !== dashFilters.product) return false;
+        if (dashFilters.type !== 'all' && rec.type !== dashFilters.type) return false;
+        if (dashFilters.condition !== 'all' && rec.condition !== dashFilters.condition) return false;
+        if (dashFilters.status !== 'all' && rec.saisStatus !== dashFilters.status) return false;
+        if (dashFilters.version !== 'all' && (rec.version || '0') !== dashFilters.version) return false;
+        return true;
+      }), [records, filterMonth, dashFilters]);
+
+      const handleInput = (e) => { setFormData(p => ({ ...p, [e.target.name]: e.target.value })); setValidationError(''); };
+      const openAddModal = () => { setFormData({ ...initialFormState, inspectionDate: latestInspectionDate || (filterMonth !== 'all' ? `2026-${filterMonth}-01` : '') }); setEditId(null); setValidationError(''); setIsModalOpen(true); };
+      const closeModal = () => setIsModalOpen(false);
+      const openViewModal = (r) => setViewRecord(r);
+      const openEditModal = (r) => { setFormData({ ...r, newRemark: '' }); setEditId(r.id); setValidationError(''); setIsModalOpen(true); };
+
+      const syncDb = async (payload, msg) => {
+        try {
+          const res = await fetch(GAS_WEB_APP_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify(payload) });
+          const out = await res.json(); if(out.status === 'success') { setLastSyncedAt(new Date()); showToast(msg); } else throw new Error(out.message);
+        } catch (e) { showToast(`Error: ${e.message}`, 'error'); } finally { setIsSubmitting(false); }
+      };
+
+      const handleSubmit = (e) => {
+        e.preventDefault(); if (isSubmitting) return; setValidationError('');
+        const req = ['equipmentNo', 'inspectionDate', 'inspectorName', 'productLine', 'type', 'jobSite', 'unit'];
+        const missing = req.filter(f => !formData[f] || String(formData[f]).trim() === '');
+        if (missing.length > 0) return setValidationError(`กรุณากรอกให้ครบ: ${missing.join(', ')}`);
+        
+        setIsSubmitting(true);
+        const og = editId ? records.find(r => r.id === editId) : null;
+        let hist = parseRemarkHistory(og?.remark);
+        if (formData.newRemark?.trim()) hist.push({ version: formData.version || '0', text: formData.newRemark.trim(), date: formatDateToDDMMYY(new Date()), author: formData.inspectorName || 'System' });
+
+        const pData = { ...formData, displayInspectionDate: formatDateToDDMMYY(formData.inspectionDate), displayGeneratedDate: formatDateToDDMMYY(formData.generatedDate), displayVersionDate: formatDateToDDMMYY(formData.versionDate), remark: JSON.stringify(hist) };
+        delete pData.newRemark;
+
+        const isUpg = og && (og.version || '0') === '0' && (formData.version || '0') !== '0';
+        let target, msg;
+        if (editId && !isUpg) { target = { ...pData, id: editId }; setRecords(p => p.map(r => r.id === editId ? target : r)); msg = 'อัปเดตสำเร็จ'; } 
+        else { target = { ...pData, id: generateUniqueId() }; setRecords(p => [target, ...p]); msg = isUpg ? `อัปเกรด V${formData.version} สำเร็จ` : 'เพิ่มสำเร็จ'; }
+        
+        closeModal(); syncDb({ action: 'SAVE', record: target }, msg);
+      };
+
+      const handleDelete = (id) => {
+        if(window.confirm('ยืนยันลบถาวร?')) { setIsSubmitting(true); setRecords(p => p.filter(r => r.id !== id)); closeModal(); syncDb({ action: 'DELETE', id }, 'ลบสำเร็จ'); }
+      };
+
+      const Badge = ({ r }) => {
+        const s = calculateSLA(r.inspectionDate, r.saisStatus);
+        if (s.status === 'none') return <span className="text-gray-400 font-bold">-</span>;
+        const colors = { closed: 'text-green-700 bg-green-100 border-green-200', overdue: 'text-red-700 bg-red-100 border-red-300 animate-pulse', warning: 'text-orange-700 bg-orange-100 border-orange-300', pending: 'text-blue-700 bg-blue-100 border-blue-200' };
+        return <span className={`flex items-center justify-center gap-1 border px-2 py-1 rounded text-[10px] font-bold shadow-sm ${colors[s.status]}`}>{s.text}</span>;
+      };
+
+      const renderDashboard = () => {
+        let stats = { passed: 0, passedOil: 0, failed: 0, closeOil: 0, cancelled: 0, overdue: 0 };
+        let ver = { v0: 0, v1: 0, v2: 0, v3p: 0 }; let insp = {}; let prod = {};
+        filteredDash.forEach(r => {
+          if (r.saisStatus === 'Passed with Completed') stats.passed++; else if (r.saisStatus === 'Passed with OIL') stats.passedOil++; else if (r.saisStatus === 'Failed') stats.failed++; else if (r.saisStatus === 'Close OIL') stats.closeOil++; else if (r.saisStatus === 'ยกเลิก') stats.cancelled++;
+          if (calculateSLA(r.inspectionDate, r.saisStatus).isOverdue) stats.overdue++;
+          const vNum = parseInt(r.version || '0'); if (vNum === 0) ver.v0++; else if (vNum === 1) ver.v1++; else if (vNum === 2) ver.v2++; else ver.v3p++;
+          if (r.inspectorName) { if(!insp[r.inspectorName]) insp[r.inspectorName] = {t:0,p:0,f:0,o:0,ov:0}; insp[r.inspectorName].t++; if(r.saisStatus==='Passed with Completed'||r.saisStatus==='Close OIL') insp[r.inspectorName].p++; if(r.saisStatus==='Failed') insp[r.inspectorName].f++; if(r.saisStatus==='Passed with OIL') insp[r.inspectorName].o++; if(calculateSLA(r.inspectionDate, r.saisStatus).isOverdue) insp[r.inspectorName].ov++; }
+          if (r.productLine) { if(!prod[r.productLine]) prod[r.productLine] = {t:0,p:0,f:0,o:0}; prod[r.productLine].t++; if(r.saisStatus==='Passed with Completed'||r.saisStatus==='Close OIL') prod[r.productLine].p++; if(r.saisStatus==='Failed') prod[r.productLine].f++; if(r.saisStatus==='Passed with OIL') prod[r.productLine].o++; }
+        });
+        const active = filteredDash.length - stats.cancelled; const sr = active > 0 ? Math.round(((stats.passed+stats.closeOil)/active)*100) : 0; const fr = active > 0 ? Math.round((stats.failed/active)*100) : 0; const or = active > 0 ? Math.round((stats.overdue/active)*100) : 0;
+
+        return (
+          <div className="space-y-4 fade-in">
+            <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-200">
+              <div className="flex justify-between items-center mb-4 border-b pb-2"><div className="flex items-center gap-2 font-bold text-sm"><Filter className="w-5 h-5 text-[#E20015]"/> Analytics Engine</div><button onClick={()=>setDashFilters({inspector:'all',product:'all',type:'all',condition:'all',status:'all',version:'all'})} className="text-xs flex gap-1 text-gray-500 hover:text-[#E20015] bg-gray-50 px-2 py-1 rounded font-bold"><RotateCcw className="w-3.5 h-3.5"/> ล้าง</button></div>
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+                {['inspector','product','type','condition','status','version'].map(f => (
+                  <select key={f} value={dashFilters[f]} onChange={(e)=>setDashFilters(p=>({...p,[f]:e.target.value}))} className="w-full bg-gray-50 border rounded-lg p-2 text-xs font-bold outline-none focus:ring-1 focus:ring-[#E20015] capitalize"><option value="all">{f} (All)</option>{(f==='inspector'?INSPECTORS:f==='product'?PRODUCT_LINES:f==='type'?TYPES:f==='condition'?CONDITIONS:f==='status'?SAIS_STATUSES:['0','1','2','3','4','5']).map(o=><option key={o} value={o}>{o}</option>)}</select>
+                ))}
+              </div>
+            </div>
+            {filteredDash.length === 0 ? <div className="bg-white rounded-xl shadow-sm p-10 text-center"><Activity className="w-12 h-12 text-gray-200 mx-auto mb-2 animate-pulse"/><h3 className="font-bold text-gray-500">ไม่พบข้อมูล</h3></div> : (
+              <>
+                <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
+                  <div className="bg-gray-900 p-5 rounded-xl shadow-md text-white flex flex-col justify-center"><h3 className="text-blue-300 text-xs font-bold uppercase mb-1">Health Score</h3><div className="text-4xl font-bold">{sr}% <span className="text-sm font-normal">Success</span></div><div className="w-full bg-white/20 h-1.5 rounded-full mt-3"><div className="bg-green-400 h-1.5 rounded-full" style={{width:`${sr}%`}}></div></div></div>
+                  <div className="bg-white border border-red-200 p-5 rounded-xl shadow-sm lg:col-span-3 flex justify-between items-center"><div className="flex gap-3 items-center"><ShieldAlert className="w-8 h-8 text-[#E20015]"/><div><h3 className="font-bold text-sm">Critical Focus</h3><p className="text-xs text-gray-500">ความเสี่ยงสูง</p></div></div><div className="flex gap-4 bg-gray-50 px-4 py-2 rounded-lg"><div className="text-center"><span className="block text-2xl font-black text-[#E20015]">{stats.failed}</span><span className="text-[10px] font-bold text-red-500">Failed</span></div><div className="text-center"><span className="block text-2xl font-black text-red-700">{stats.overdue}</span><span className="text-[10px] font-bold text-red-700">Overdue</span></div></div></div>
+                </div>
+                <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
+                  <div className="bg-white p-3 rounded-xl border flex flex-col"><span className="text-[10px] font-bold text-gray-500">TOTAL</span><div className="text-xl font-bold">{filteredDash.length}</div></div>
+                  <div className="bg-green-50 p-3 rounded-xl border border-green-200 flex flex-col"><span className="text-[10px] font-bold text-green-700">PASSED</span><div className="text-xl font-bold text-green-700">{stats.passed}</div></div>
+                  <div className="bg-gray-800 p-3 rounded-xl flex flex-col"><span className="text-[10px] font-bold text-gray-300">CLOSE OIL</span><div className="text-xl font-bold text-white">{stats.closeOil}</div></div>
+                  <div className="bg-red-50 p-3 rounded-xl border border-red-200 flex flex-col"><span className="text-[10px] font-bold text-red-700">FAILED</span><div className="text-xl font-bold text-red-700">{stats.failed}</div></div>
+                  <div className="bg-amber-50 p-3 rounded-xl border border-amber-200 flex flex-col"><span className="text-[10px] font-bold text-amber-700">TRACKING</span><div className="text-xl font-bold text-amber-700">{stats.passedOil}</div></div>
+                  <div className="bg-blue-50 p-3 rounded-xl border border-blue-200 flex flex-col"><span className="text-[10px] font-bold text-blue-700">VER. 0</span><div className="text-xl font-bold text-blue-700">{ver.v0}</div></div>
+                </div>
+              </>
+            )}
+          </div>
+        );
+      };
+
+      return (
+        <div className="min-h-screen p-2 sm:p-4 md:p-6 pb-24 md:pb-28 relative">
+          {toast && <div className="fixed top-4 right-4 z-50 toast-enter"><div className={`flex items-center gap-2 px-4 py-3 rounded-lg shadow-lg text-sm font-bold text-white ${toast.type==='error'?'bg-red-600':'bg-green-600'}`}>{toast.message}</div></div>}
+          
+          <div className="max-w-[1450px] mx-auto space-y-4">
+            <div className="bg-white rounded-xl shadow-sm border-t-4 border-[#E20015] p-4 flex flex-col sm:flex-row justify-between items-start sm:items-center relative">
+              <div className="absolute top-2 right-2 flex items-center bg-gray-50 rounded px-2 py-1 z-10 text-[10px] font-bold text-gray-500">
+                {syncStatus==='syncing'?<><RefreshCw className="w-3 h-3 text-blue-500 animate-spin mr-1"/> โหลด...</>:syncStatus==='success'?<><Cloud className="w-3 h-3 text-green-600 mr-1"/> {formatSyncTime(lastSyncedAt)}</>:<><CloudOff className="w-3 h-3 text-red-500 mr-1"/> ล้มเหลว</>}
+              </div>
+              <div className="flex items-center gap-3 w-full">
+                <div className="bg-[#E20015] p-2 rounded-lg text-white hidden sm:block"><Building2 className="w-6 h-6" /></div>
+                <div><h1 className="text-xl sm:text-2xl font-black text-gray-900 leading-none">SAIS <span className="text-[#E20015]">DATABASE</span> 2026</h1><div className="flex items-center gap-2 mt-2"><span className="text-xs font-bold text-gray-500">รอบ:</span><select value={filterMonth} onChange={(e)=>setFilterMonth(e.target.value)} className="bg-gray-100 border text-xs font-bold rounded p-1 outline-none">{MONTHS.map(m=><option key={m.value} value={m.value}>{m.label}</option>)}</select></div></div>
+              </div>
+            </div>
+
+            {activeTab === 'dashboard' ? renderDashboard() : (
+              <div className="bg-white rounded-xl shadow-sm border border-gray-200 fade-in flex flex-col">
+                <div className="p-3 border-b flex flex-col sm:flex-row justify-between items-center gap-3 bg-gray-50">
+                  <h3 className="font-bold text-sm flex items-center gap-2">{activeTab==='pending'?<FileSpreadsheet className="text-blue-600 w-4 h-4"/>:<ClipboardList className="text-amber-600 w-4 h-4"/>} {activeTab==='pending'?'PENDING':'TRACKING OIL'} <span className="bg-gray-800 text-white text-[10px] px-2 rounded-full">{displayedRecords.length}</span></h3>
+                  <div className="flex w-full sm:w-auto gap-2">
+                    <div className="relative w-full sm:w-48"><Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" /><input type="text" placeholder="Eq No / Site..." value={searchTerm} onChange={(e)=>setSearchTerm(e.target.value)} className="w-full bg-white border rounded-md pl-8 pr-2 py-1.5 text-xs outline-none focus:border-[#E20015]" /></div>
+                    <button onClick={openAddModal} className="flex items-center gap-1 bg-[#E20015] text-white px-3 py-1.5 rounded-md font-bold text-xs shrink-0 active:scale-95"><Plus className="w-3.5 h-3.5" /> <span className="hidden sm:inline">เพิ่มข้อมูล</span></button>
+                  </div>
+                </div>
+                
+                <div className="overflow-x-auto overflow-y-hidden custom-scrollbar max-h-[60vh]">
+                  <table className="w-full text-xs text-left whitespace-nowrap min-w-max">
+                    <thead className="sticky-header uppercase text-[10px] text-gray-500">
+                      <tr>
+                        <th className="px-3 py-2 border-r text-center">No.</th><th className="px-3 py-2 border-r sticky-col-header text-[#E20015]">Equipment No.</th><th className="px-3 py-2 border-r">Insp. Date</th>
+                        {activeTab==='pending' && <><th className="px-3 py-2 border-r text-gray-400">Gen. Date</th><th className="px-3 py-2 border-r text-gray-400">Sys</th></>}
+                        <th className="px-3 py-2 border-r">Inspector</th><th className="px-3 py-2 border-r text-center">Prod</th><th className="px-3 py-2 border-r text-center">Type</th><th className="px-3 py-2 border-r">Site</th><th className="px-3 py-2 border-r text-center">Unit</th>
+                        <th className="px-3 py-2 border-r text-center">Cond</th>
+                        {activeTab==='pending' && <><th className="px-3 py-2 border-r text-gray-400 text-center">Pre</th><th className="px-3 py-2 border-r text-gray-400 text-center">Buz</th></>}
+                        {activeTab==='oil' && <><th className="px-3 py-2 border-r text-center bg-blue-50/50">Ver</th><th className="px-3 py-2 border-r text-center">V. Date</th><th className="px-3 py-2 border-r text-center bg-amber-50">SLA</th></>}
+                        <th className="px-3 py-2 border-r max-w-[200px]">Remark/Comment</th><th className="px-3 py-2 text-center">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                      {paginatedRecords.length === 0 ? <tr><td colSpan="20" className="py-10 text-center text-gray-400 text-xs">ไม่พบข้อมูล</td></tr> : paginatedRecords.map((r, i) => (
+                        <tr key={r.id} onClick={()=>openViewModal(r)} className={`bg-white hover:bg-blue-50 cursor-pointer ${r.saisStatus==='ยกเลิก'?'opacity-50':''}`}>
+                          <td className="px-3 py-2 border-r text-center text-gray-400">{(currentPage-1)*ITEMS_PER_PAGE+i+1}</td>
+                          <td className="px-3 py-2 border-r font-black text-[#E20015] sticky-col group-hover:bg-blue-50">{r.equipmentNo}</td>
+                          <td className="px-3 py-2 border-r font-medium">{r.displayInspectionDate}</td>
+                          {activeTab==='pending'&&<><td className="px-3 py-2 border-r text-gray-400">{r.displayGeneratedDate}</td><td className="px-3 py-2 border-r text-gray-400 text-center">{r.generatedInSystem||'-'}</td></>}
+                          <td className="px-3 py-2 border-r font-bold">{r.inspectorName}</td><td className="px-3 py-2 border-r text-center">{r.productLine}</td><td className="px-3 py-2 border-r text-center">{r.type}</td><td className="px-3 py-2 border-r truncate max-w-[150px]">{r.jobSite}</td><td className="px-3 py-2 border-r text-center">{r.unit}</td><td className="px-3 py-2 border-r text-center">{r.condition||'-'}</td>
+                          {activeTab==='pending'&&<><td className="px-3 py-2 border-r text-gray-400 text-center">{r.preCheck||'-'}</td><td className="px-3 py-2 border-r text-gray-400 text-center">{r.buzzer||'-'}</td></>}
+                          {activeTab==='oil'&&<><td className="px-3 py-2 border-r text-center font-black text-blue-700 bg-blue-50/30">V{r.version||'0'}</td><td className="px-3 py-2 border-r text-center text-gray-500">{r.displayVersionDate||'-'}</td><td className="px-3 py-2 border-r text-center bg-amber-50/20"><Badge r={r}/></td></>}
+                          <td className="px-3 py-2 border-r truncate max-w-[150px] text-gray-500">{(()=>{ const h=parseRemarkHistory(r.remark); return h.length>0&&h[0].text?<span className="flex items-center gap-1 text-yellow-700"><MessageSquare className="w-3 h-3"/> {h[h.length-1].text}</span>:'-'; })()}</td>
+                          <td className="px-3 py-2 text-center"><span className={`px-2 py-0.5 rounded text-[9px] font-bold border ${r.saisStatus==='Passed with Completed'?'bg-green-100 text-green-700 border-green-200':r.saisStatus==='Close OIL'?'bg-green-600 text-white border-green-600':r.saisStatus==='Failed'?'bg-red-100 text-red-700 border-red-200':r.saisStatus==='Passed with OIL'?'bg-amber-100 text-amber-700 border-amber-200':r.saisStatus==='ยกเลิก'?'bg-gray-800 text-gray-300 border-gray-900':'bg-white text-gray-500 border-gray-200'}`}>{r.saisStatus||'PENDING'}</span></td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <div className="flex justify-between items-center p-3 bg-gray-50 border-t">
+                  <span className="text-[10px] font-bold text-gray-500">แสดง {paginatedRecords.length>0?(currentPage-1)*ITEMS_PER_PAGE+1:0} - {Math.min(currentPage*ITEMS_PER_PAGE, displayedRecords.length)} จาก {displayedRecords.length}</span>
+                  <div className="flex items-center gap-2"><button disabled={currentPage===1} onClick={()=>setCurrentPage(p=>p-1)} className="p-1 bg-white border rounded disabled:opacity-30"><ChevronLeft className="w-4 h-4"/></button><span className="text-[10px] font-bold px-1">{currentPage} / {totalPages||1}</span><button disabled={currentPage>=totalPages||totalPages===0} onClick={()=>setCurrentPage(p=>p+1)} className="p-1 bg-white border rounded disabled:opacity-30"><ChevronRight className="w-4 h-4"/></button></div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div className={`fixed bottom-0 left-0 right-0 bg-white border-t z-40 pb-safe transition-transform ${isNavVisible?'translate-y-0':'translate-y-full'}`}>
+            <div className="max-w-[1450px] mx-auto flex justify-around p-1.5"><button onClick={()=>{setActiveTab('pending');window.scrollTo(0,0);}} className={`flex flex-col items-center w-full py-1.5 rounded-lg ${activeTab==='pending'?'text-[#E20015] bg-red-50 font-bold':'text-gray-400'}`}><FileSpreadsheet className="w-4 h-4"/><span className="text-[9px]">PENDING</span></button><button onClick={()=>{setActiveTab('oil');window.scrollTo(0,0);}} className={`flex flex-col items-center w-full py-1.5 rounded-lg ${activeTab==='oil'?'text-[#E20015] bg-red-50 font-bold':'text-gray-400'}`}><ClipboardList className="w-4 h-4"/><span className="text-[9px]">TRACKING</span></button><button onClick={()=>{setActiveTab('dashboard');window.scrollTo(0,0);}} className={`flex flex-col items-center w-full py-1.5 rounded-lg ${activeTab==='dashboard'?'text-[#E20015] bg-red-50 font-bold':'text-gray-400'}`}><BarChart2 className="w-4 h-4"/><span className="text-[9px]">DASHBOARD</span></button></div>
+          </div>
+
+          {isModalOpen && (
+            <div className="fixed inset-0 bg-black/60 z-50 flex justify-center items-end sm:items-center sm:p-4"><div className="bg-white w-full sm:rounded-xl sm:max-w-3xl max-h-[95vh] flex flex-col slide-up"><div className="bg-gray-50 p-3 border-b flex justify-between items-center rounded-t-xl"><h2 className="font-black text-sm">{editId?'อัปเดตข้อมูล':'เพิ่มข้อมูลใหม่'}</h2><button onClick={closeModal}><X className="w-4 h-4 text-gray-500"/></button></div><div className="p-4 overflow-y-auto custom-scrollbar text-xs">
+              {validationError && <div className="mb-3 p-2 bg-red-50 text-red-600 rounded flex items-center gap-1 font-bold"><AlertCircle className="w-3 h-3"/> {validationError}</div>}
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3"><div className="space-y-1"><label className="font-bold text-gray-500 uppercase">Eq No. *</label><input type="text" name="equipmentNo" value={formData.equipmentNo} onChange={handleInput} className="w-full border rounded p-2 focus:ring-1 outline-none font-black text-[#E20015]" /></div><div className="space-y-1"><label className="font-bold text-gray-500 uppercase">Date *</label><input type="date" name="inspectionDate" value={formData.inspectionDate} onChange={handleInput} className="w-full border rounded p-2 focus:ring-1 outline-none" /></div><div className="space-y-1"><label className="font-bold text-gray-500 uppercase">Inspector *</label><select name="inspectorName" value={formData.inspectorName} onChange={handleInput} className="w-full border rounded p-2 focus:ring-1 outline-none"><option value="">-- เลือก --</option>{INSPECTORS.map(o=><option key={o} value={o}>{o}</option>)}</select></div><div className="space-y-1"><label className="font-bold text-gray-500 uppercase">Product *</label><select name="productLine" value={formData.productLine} onChange={handleInput} className="w-full border rounded p-2 focus:ring-1 outline-none"><option value="">-- เลือก --</option>{PRODUCT_LINES.map(o=><option key={o} value={o}>{o}</option>)}</select></div><div className="space-y-1"><label className="font-bold text-gray-500 uppercase">Type *</label><select name="type" value={formData.type} onChange={handleInput} className="w-full border rounded p-2 focus:ring-1 outline-none"><option value="">-- เลือก --</option>{TYPES.map(o=><option key={o} value={o}>{o}</option>)}</select></div><div className="space-y-1 col-span-2"><label className="font-bold text-gray-500 uppercase">Site *</label><input type="text" name="jobSite" value={formData.jobSite} onChange={handleInput} className="w-full border rounded p-2 focus:ring-1 outline-none" /></div><div className="space-y-1"><label className="font-bold text-gray-500 uppercase">Unit *</label><input type="text" name="unit" value={formData.unit} onChange={handleInput} className="w-full border rounded p-2 focus:ring-1 outline-none" /></div>
+              <div className="col-span-2 lg:col-span-4 border-t my-1"></div>
+              <div className="space-y-1 col-span-2 lg:col-span-1"><label className="font-bold text-blue-700 uppercase">Status</label><select name="saisStatus" value={formData.saisStatus} onChange={handleInput} className="w-full border border-blue-300 bg-blue-50 rounded p-2 font-bold text-blue-800 outline-none"><option value="">-- เลือก --</option>{SAIS_STATUSES.map(o=><option key={o} value={o}>{o}</option>)}</select></div>
+              <div className={`space-y-1 ${activeTab!=='oil'&&!['Passed with OIL','Failed','Close OIL'].includes(formData.saisStatus)?'opacity-40 pointer-events-none':''}`}><label className="font-bold text-amber-600 uppercase">Version</label><select name="version" value={formData.version||'0'} onChange={handleInput} className="w-full border border-amber-300 bg-amber-50 rounded p-2 font-bold text-amber-900 outline-none"><option value="0">V0</option><option value="1">V1</option><option value="2">V2</option><option value="3">V3</option><option value="4">V4</option><option value="5">V5</option></select></div><div className={`space-y-1 ${activeTab!=='oil'&&!['Passed with OIL','Failed','Close OIL'].includes(formData.saisStatus)?'opacity-40 pointer-events-none':''}`}><label className="font-bold text-amber-600 uppercase">Ver Date</label><input type="date" name="versionDate" value={formData.versionDate||''} onChange={handleInput} className="w-full border border-amber-300 bg-amber-50 rounded p-2 font-bold text-amber-900 outline-none" /></div>
+              <div className="space-y-1"><label className="font-bold text-gray-500 uppercase">Condition</label><select name="condition" value={formData.condition} onChange={handleInput} className="w-full border rounded p-2 outline-none"><option value="">-- เลือก --</option>{CONDITIONS.map(o=><option key={o} value={o}>{o}</option>)}</select></div><div className="space-y-1"><label className="font-bold text-gray-500 uppercase">Gen Date</label><input type="date" name="generatedDate" value={formData.generatedDate} onChange={handleInput} className="w-full border rounded p-2 outline-none" /></div>
+              <div className="grid grid-cols-3 gap-1 col-span-2 lg:col-span-1"><div><label className="text-[9px] font-bold text-gray-500">Gen Sys</label><select name="generatedInSystem" value={formData.generatedInSystem} onChange={handleInput} className="w-full border rounded p-1.5 outline-none"><option value="">-</option><option value="YES">YES</option></select></div><div><label className="text-[9px] font-bold text-gray-500">Pre</label><select name="preCheck" value={formData.preCheck} onChange={handleInput} className="w-full border rounded p-1.5 outline-none"><option value="">-</option><option value="OK">OK</option></select></div><div><label className="text-[9px] font-bold text-gray-500">Buz</label><select name="buzzer" value={formData.buzzer} onChange={handleInput} className="w-full border rounded p-1.5 outline-none"><option value="">-</option><option value="YES">YES</option><option value="N/A">N/A</option></select></div></div>
+              <div className="col-span-2 lg:col-span-4 bg-gray-50 p-2 rounded border"><label className="font-bold text-gray-800 flex gap-1 mb-2"><MessageSquare className="w-3 h-3"/> ประวัติคอมเมนต์</label><div className="space-y-1 mb-2 max-h-24 overflow-y-auto">{(()=>{ const h=parseRemarkHistory(formData.remark); if(!h.length||!h[0].text) return <div className="text-gray-400 py-1 text-center">ไม่มีคอมเมนต์</div>; return h.map((x,i)=><div key={i} className="bg-yellow-50 p-1.5 rounded border border-yellow-100"><div className="flex justify-between mb-0.5"><span className="text-[8px] font-bold bg-yellow-200 px-1 rounded">V{x.version}</span><span className="text-[8px] text-gray-400">{x.author}</span></div><p className="text-[10px]">{x.text}</p></div>) })()}</div><input type="text" name="newRemark" value={formData.newRemark||''} onChange={handleInput} className="w-full border rounded p-2 outline-none focus:border-[#E20015]" placeholder="เพิ่มคอมเมนต์ใหม่..." /></div></div>
+            </div><div className="bg-gray-50 p-3 border-t flex justify-between shrink-0">{editId?<button onClick={()=>handleDelete(editId)} disabled={isSubmitting} className="px-3 py-1.5 rounded font-bold text-red-600 bg-white border flex gap-1 disabled:opacity-50"><Trash2 className="w-3.5 h-3.5"/> ลบ</button>:<div></div>}<div className="flex gap-2"><button onClick={closeModal} className="px-3 py-1.5 rounded font-bold bg-white border">ยกเลิก</button><button onClick={handleSubmit} disabled={isSubmitting} className="px-4 py-1.5 rounded font-bold bg-[#E20015] text-white flex gap-1 disabled:bg-red-300">{isSubmitting?<RefreshCw className="w-3.5 h-3.5 animate-spin"/>:<Save className="w-3.5 h-3.5"/>} บันทึก</button></div></div></div></div>
+          )}
+
+          {viewRecord && (
+            <div className="fixed inset-0 bg-black/60 z-50 flex justify-center items-end sm:items-center sm:p-4"><div className="bg-white w-full sm:rounded-xl sm:max-w-2xl max-h-[90vh] flex flex-col slide-up"><div className="bg-gray-50 p-3 border-b flex justify-between items-center rounded-t-xl"><div className="flex items-center gap-1.5 font-black text-sm"><Eye className="w-4 h-4 text-blue-600"/> รายละเอียด</div><button onClick={closeViewModal}><X className="w-4 h-4 text-gray-500"/></button></div><div className="p-4 overflow-y-auto custom-scrollbar text-xs"><div className="grid grid-cols-2 md:grid-cols-3 gap-3"><div><span className="text-[9px] text-gray-400 font-bold block">Eq. No.</span><span className="text-base font-black text-[#E20015]">{viewRecord.equipmentNo}</span></div><div><span className="text-[9px] text-gray-400 font-bold block">Insp. Date</span><span className="font-bold">{viewRecord.displayInspectionDate}</span></div><div><span className="text-[9px] text-gray-400 font-bold block">Inspector</span><span className="font-bold">{viewRecord.inspectorName}</span></div><div><span className="text-[9px] text-gray-400 font-bold block">Product</span><span className="bg-gray-100 px-2 py-0.5 rounded font-bold">{viewRecord.productLine}</span></div><div><span className="text-[9px] text-gray-400 font-bold block">Type</span><span className="bg-gray-100 px-2 py-0.5 rounded font-bold">{viewRecord.type}</span></div><div><span className="text-[9px] text-gray-400 font-bold block">Unit</span><span className="font-bold">{viewRecord.unit}</span></div><div className="col-span-2 md:col-span-3"><span className="text-[9px] text-gray-400 font-bold block">Job Site</span><span className="bg-gray-50 p-2 rounded block font-bold border">{viewRecord.jobSite}</span></div></div><div className="border-t border-dashed my-3"></div><div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-3"><div><span className="text-[9px] text-gray-400 font-bold block mb-1">Status</span><span className={`px-2 py-0.5 rounded text-[10px] font-bold border ${viewRecord.saisStatus==='Passed with Completed'?'bg-green-100 text-green-700 border-green-200':viewRecord.saisStatus==='Close OIL'?'bg-green-600 text-white border-green-600':viewRecord.saisStatus==='Failed'?'bg-red-100 text-red-700 border-red-200':viewRecord.saisStatus==='Passed with OIL'?'bg-amber-100 text-amber-700 border-amber-200':'bg-blue-50 text-blue-700'}`}>{viewRecord.saisStatus||'PENDING'}</span></div><div><span className="text-[9px] text-gray-400 font-bold block">Version</span><span className="font-black text-blue-800">V{viewRecord.version||'0'}</span></div><div><span className="text-[9px] text-gray-400 font-bold block">Ver. Date</span><span className="font-bold">{viewRecord.displayVersionDate||'-'}</span></div><div><span className="text-[9px] text-gray-400 font-bold block">Condition</span><span className="font-bold">{viewRecord.condition||'-'}</span></div><div><span className="text-[9px] text-gray-400 font-bold block">Gen. Date</span><span className="font-bold">{viewRecord.displayGeneratedDate}</span></div><div><span className="text-[9px] text-gray-400 font-bold block">Sys/Pre/Buz</span><span className="font-bold">{viewRecord.generatedInSystem||'-'} / {viewRecord.preCheck||'-'} / {viewRecord.buzzer||'-'}</span></div></div><div><span className="text-[9px] text-gray-400 font-bold block mb-1"><MessageSquare className="w-3 h-3 inline"/> ประวัติคอมเมนต์</span><div className="bg-gray-50 p-2 rounded border max-h-32 overflow-y-auto">{(()=>{ const h=parseRemarkHistory(viewRecord.remark); if(!h.length||!h[0].text) return <div className="text-gray-400 text-center">ไม่มีข้อมูล</div>; return h.map((x,i)=><div key={i} className="bg-white p-1.5 rounded border mb-1"><div className="flex justify-between mb-0.5"><span className="text-[8px] font-black text-white bg-blue-500 px-1 rounded">V{x.version}</span><span className="text-[8px] text-gray-400">{x.date}</span></div><p className="text-[10px]">{x.text}</p></div>) })()}</div></div></div><div className="bg-gray-50 p-3 border-t flex justify-end gap-2 shrink-0"><button onClick={closeViewModal} className="px-4 py-1.5 bg-white border rounded font-bold">ปิด</button><button onClick={()=>{closeViewModal();openEditModal(viewRecord);}} className="px-4 py-1.5 bg-blue-600 text-white rounded font-bold flex items-center gap-1"><Edit className="w-3.5 h-3.5"/> แก้ไข</button></div></div></div>
+          )}
+        </div>
+      );
+    }
+    createRoot(document.getElementById('root')).render(<App />);
+  </script>
+</body>
+</html>
