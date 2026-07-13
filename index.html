@@ -1,0 +1,1132 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>SAIS DATABASE 2026</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <style>
+    ::-webkit-scrollbar { width: 5px; height: 5px; }
+    ::-webkit-scrollbar-track { background: #f9fafb; border-radius: 10px; }
+    ::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 10px; }
+    ::-webkit-scrollbar-thumb:hover { background: #E20015; }
+    .pb-safe { padding-bottom: calc(env(safe-area-inset-bottom) + 1rem); }
+    .fade-in { animation: fadeIn 0.4s ease-in-out; }
+    .slide-up { animation: slideUp 0.3s ease-out forwards; }
+    .toast-enter { animation: toastEnter 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards; }
+    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+    @keyframes slideUp { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+    @keyframes toastEnter { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+    
+    /* Sticky Top Header Only */
+    .sticky-header th { position: sticky; top: 0; z-index: 10; background-color: #f3f4f6; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
+    
+    /* SVG Chart Utilities */
+    .svg-chart text { font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }
+  </style>
+</head>
+<body class="bg-[#F4F4F4] text-gray-800 antialiased overflow-x-hidden overscroll-y-contain font-sans">
+  <div id="root"></div>
+  <script type="text/babel" data-type="module">
+    import React, { useState, useMemo, useEffect, useCallback } from 'https://esm.sh/react@18.2.0';
+    import { createRoot } from 'https://esm.sh/react-dom@18.2.0/client';
+    import { Save, Plus, Trash2, FileSpreadsheet, Building2, ChevronRight, ChevronLeft, AlertCircle, X, Edit, ClipboardList, Clock, CheckCircle2, AlertTriangle, RefreshCw, Cloud, CloudOff, BarChart2, Filter, RotateCcw, Activity, ShieldAlert, Target, Award, Package, Eye, MessageSquare, Search, History, Settings, TrendingUp, PieChart, Users } from 'https://esm.sh/lucide-react@0.300.0';
+
+    const GAS_WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbyvVssxbmdOnE5wypreTNxi9eYnDpkgXWO5grTMU1LklyuP7LwmON_X4YdZumxgS5uX/exec';
+    
+    const PRODUCT_LINES = ["3300", "5500", "7000", "ES1", "ES2", "ES3", "ES5.0", "ES5", "ESC", "MW", "S-Villa", "Flex-7"];
+    const TYPES = ["NI", "MOD-R", "MOD-T", "NI CNX", "NI HKT"];
+    const SAIS_STATUSES = ["Passed with Completed", "Passed with OIL", "Failed", "ยกเลิก"];
+    const CONDITIONS = ["Final", "BUILDER LIFT", "TEMPORARY POWER SUPPLY"];
+    const MONTHS = [{ value: 'all', label: 'ทุกเดือนในระบบ' }, { value: '01', label: 'มกราคม' }, { value: '02', label: 'กุมภาพันธ์' }, { value: '03', label: 'มีนาคม' }, { value: '04', label: 'เมษายน' }, { value: '05', label: 'พฤษภาคม' }, { value: '06', label: 'มิถุนายน' }, { value: '07', label: 'กรกฎาคม' }, { value: '08', label: 'สิงหาคม' }, { value: '09', label: 'กันยายน' }, { value: '10', label: 'ตุลาคม' }, { value: '11', label: 'พฤศจิกายน' }, { value: '12', label: 'ธันวาคม' }];
+    const DEFAULT_INSPECTORS = ["Thongchai Chalothornnarumit", "Prayod Yoprakhon", "Choosak Choomuang", "Pradit Mingson", "Teeratat Piyasakaksorn", "Matee Khanti", "Narong Robrum", "Chakrin Dangwichai"];
+    const STANDARD_UNITS = ["L1", "L2", "PL1", "PL2", "SL1"];
+
+    const formatDateToDDMMYY = (d) => { if (!d) return '-'; const date = new Date(d); return isNaN(date.getTime()) ? '-' : `${String(date.getDate()).padStart(2, '0')}/${String(date.getMonth() + 1).padStart(2, '0')}/${String(date.getFullYear()).slice(-2)}`; };
+    const formatDateForInput = (d) => { if (!d) return ''; const date = new Date(d); return isNaN(date.getTime()) ? '' : `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`; };
+    const getMonthOnly = (d) => { if (!d) return ''; const date = new Date(d); return isNaN(date.getTime()) ? '' : String(date.getMonth() + 1).padStart(2, '0'); };
+    const formatSyncTime = (d) => d ? `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}` : '';
+    const generateUniqueId = () => crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).substring(2);
+    const parseRemarkHistory = (str) => { try { const p = JSON.parse(str); return Array.isArray(p) ? p : [{ text: str, date: '-', author: 'System' }]; } catch(e) { return str ? [{ text: str, date: '-', author: 'System' }] : []; } };
+
+    function App() {
+      const currentMonthStr = String(new Date().getMonth() + 1).padStart(2, '0');
+      const [records, setRecords] = useState([]);
+      const [activeTab, setActiveTab] = useState('records'); 
+      const [filterMonth, setFilterMonth] = useState(currentMonthStr);
+      const [searchTerm, setSearchTerm] = useState('');
+      const [dashFilters, setDashFilters] = useState({ inspector: 'all', product: 'all', type: 'all', condition: 'all', status: 'all' });
+      
+      // State สำหรับการกรองย่อยในหัวตาราง
+      const [tableFilters, setTableFilters] = useState({
+         sys: '', insp: '', prod: '', type: '', unit: '', cond: '', pre: '', buz: '', status: ''
+      });
+
+      const [isModalOpen, setIsModalOpen] = useState(false);
+      const [editId, setEditId] = useState(null);
+      const [viewRecord, setViewRecord] = useState(null);
+      const [syncStatus, setSyncStatus] = useState('idle'); 
+      const [isSubmitting, setIsSubmitting] = useState(false);
+      const [lastSyncedAt, setLastSyncedAt] = useState(null); 
+      const [isNavVisible, setIsNavVisible] = useState(true);
+      const [lastScrollY, setLastScrollY] = useState(0);
+      const [currentPage, setCurrentPage] = useState(1);
+      const ITEMS_PER_PAGE = 30; 
+      const [toast, setToast] = useState(null);
+      
+      const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+      const [inspectorsData, setInspectorsData] = useState(() => {
+        try { const saved = localStorage.getItem('sais_inspectors_data'); if (saved) return JSON.parse(saved); } catch(e) {}
+        return DEFAULT_INSPECTORS.map(name => ({ name, certs: [...PRODUCT_LINES] }));
+      });
+
+      useEffect(() => { localStorage.setItem('sais_inspectors_data', JSON.stringify(inspectorsData)); }, [inspectorsData]);
+
+      const showToast = (message, type = 'success') => { setToast({ message, type }); setTimeout(() => setToast(null), 3000); };
+      const closeViewModal = () => setViewRecord(null);
+
+      const initialFormState = { equipmentNo: '', inspectionDate: '', generatedDate: '', generatedInSystem: '', inspectorName: '', productLine: '', type: '', jobSite: '', unit: '', preCheck: '', buzzer: '', saisStatus: '', condition: '', remark: '', newRemark: '' };
+      const [formData, setFormData] = useState(initialFormState);
+      const [validationError, setValidationError] = useState('');
+
+      const fetchRecords = useCallback(async (isSilent = false) => {
+        if (!isSilent) setSyncStatus('syncing');
+        try {
+          const res = await fetch(GAS_WEB_APP_URL); if (!res.ok) throw new Error('Net Error');
+          const data = await res.json();
+          if (Array.isArray(data)) { setRecords(data.filter(i => i.id && i.id.toString().trim() !== '')); setSyncStatus('success'); setLastSyncedAt(new Date()); } 
+          else { setRecords([]); setSyncStatus('idle'); }
+        } catch (e) { setSyncStatus('error'); if (!isSilent) showToast('เชื่อมต่อฐานข้อมูลล้มเหลว', 'error'); }
+      }, []);
+
+      useEffect(() => { fetchRecords(); }, [fetchRecords]);
+
+      useEffect(() => {
+        let startY = 0;
+        const ts = (e) => { if (window.scrollY === 0) startY = e.touches[0].clientY; };
+        const te = (e) => { if (window.scrollY === 0 && startY > 0 && e.changedTouches[0].clientY - startY > 100) { showToast('อัปเดตข้อมูล...', 'success'); fetchRecords(); } startY = 0; };
+        window.addEventListener('touchstart', ts, { passive: true }); window.addEventListener('touchend', te, { passive: true });
+        return () => { window.removeEventListener('touchstart', ts); window.removeEventListener('touchend', te); };
+      }, [fetchRecords]);
+
+      useEffect(() => {
+        const handleScroll = () => { setIsNavVisible(window.scrollY < lastScrollY || window.scrollY < 50); setLastScrollY(window.scrollY); };
+        window.addEventListener('scroll', handleScroll, { passive: true }); return () => window.removeEventListener('scroll', handleScroll);
+      }, [lastScrollY]);
+
+      useEffect(() => { setCurrentPage(1); }, [activeTab, filterMonth, searchTerm, dashFilters, tableFilters]);
+
+      const latestInspectionDate = useMemo(() => {
+        const sorted = [...records].sort((a, b) => new Date(b.inspectionDate || 0) - new Date(a.inspectionDate || 0)); return sorted[0]?.inspectionDate || '';
+      }, [records]);
+
+      // ดึงตัวเลือกทั้งหมดที่มีอยู่จริงในฐานข้อมูล เพื่อใช้เป็น Filter ย่อยในตาราง
+      const uniqueTableOptions = useMemo(() => {
+         const opts = { sys: new Set(), insp: new Set(), prod: new Set(), type: new Set(), unit: new Set(), cond: new Set(), pre: new Set(), buz: new Set(), status: new Set() };
+         records.forEach(r => {
+            if(r.generatedInSystem && r.generatedInSystem.trim() !== '') opts.sys.add(r.generatedInSystem);
+            if(r.inspectorName && r.inspectorName.trim() !== '') opts.insp.add(r.inspectorName);
+            if(r.productLine && r.productLine.trim() !== '') opts.prod.add(r.productLine);
+            if(r.type && r.type.trim() !== '') opts.type.add(r.type);
+            if(r.unit && r.unit.trim() !== '') opts.unit.add(r.unit);
+            if(r.condition && r.condition.trim() !== '') opts.cond.add(r.condition);
+            if(r.preCheck && r.preCheck.trim() !== '') opts.pre.add(r.preCheck);
+            if(r.buzzer && r.buzzer.trim() !== '') opts.buz.add(r.buzzer);
+            if(r.saisStatus && r.saisStatus.trim() !== '') opts.status.add(r.saisStatus);
+         });
+         return {
+            sys: [...opts.sys].sort(), insp: [...opts.insp].sort(), prod: [...opts.prod].sort(), type: [...opts.type].sort(),
+            unit: [...opts.unit].sort(), cond: [...opts.cond].sort(), pre: [...opts.pre].sort(), buz: [...opts.buz].sort(), status: [...opts.status].sort()
+         };
+      }, [records]);
+
+      const displayedRecords = useMemo(() => {
+        return records.filter(rec => {
+          if (filterMonth !== 'all' && getMonthOnly(rec.inspectionDate) !== filterMonth) return false;
+          
+          if (searchTerm) { 
+             const s = searchTerm.toLowerCase(); 
+             if (!String(rec.equipmentNo||'').toLowerCase().includes(s) && !String(rec.jobSite||'').toLowerCase().includes(s)) return false; 
+          }
+
+          // ตรวจสอบกับตัวกรองย่อยในหัวตาราง
+          if (tableFilters.sys && rec.generatedInSystem !== tableFilters.sys) return false;
+          if (tableFilters.insp && rec.inspectorName !== tableFilters.insp) return false;
+          if (tableFilters.prod && rec.productLine !== tableFilters.prod) return false;
+          if (tableFilters.type && rec.type !== tableFilters.type) return false;
+          if (tableFilters.unit && rec.unit !== tableFilters.unit) return false;
+          if (tableFilters.cond && rec.condition !== tableFilters.cond) return false;
+          if (tableFilters.pre && rec.preCheck !== tableFilters.pre) return false;
+          if (tableFilters.buz && rec.buzzer !== tableFilters.buz) return false;
+          if (tableFilters.status && rec.saisStatus !== tableFilters.status) return false;
+
+          return true;
+        }).sort((a, b) => {
+           const dA = new Date(a.inspectionDate || 0).getTime();
+           const dB = new Date(b.inspectionDate || 0).getTime();
+           if (!isNaN(dA) && !isNaN(dB)) { if (dA !== dB) return dA - dB; }
+           return parseInt(a.id || 0) - parseInt(b.id || 0);
+        });
+      }, [records, filterMonth, searchTerm, tableFilters]);
+
+      const totalPages = Math.ceil(displayedRecords.length / ITEMS_PER_PAGE);
+      const paginatedRecords = useMemo(() => displayedRecords.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE), [displayedRecords, currentPage]);
+
+      const processedPaginatedRecords = useMemo(() => {
+        let currentBgIsGray = false;
+        let lastProcessedDate = null;
+        return paginatedRecords.map((r, i) => {
+          const rDate = formatDateToDDMMYY(r.inspectionDate);
+          let showDate = false;
+          
+          if (rDate !== lastProcessedDate) {
+            showDate = true;
+            if (i > 0) currentBgIsGray = !currentBgIsGray;
+            lastProcessedDate = rDate;
+          }
+          
+          return {
+            ...r,
+            displayDateFormatted: rDate,
+            showDate: showDate,
+            bgClass: currentBgIsGray ? 'bg-gray-50' : 'bg-white'
+          };
+        });
+      }, [paginatedRecords]);
+
+      const filteredDash = useMemo(() => records.filter(rec => {
+        if (filterMonth !== 'all' && getMonthOnly(rec.inspectionDate) !== filterMonth) return false;
+        if (dashFilters.inspector !== 'all' && rec.inspectorName !== dashFilters.inspector) return false;
+        if (dashFilters.product !== 'all' && rec.productLine !== dashFilters.product) return false;
+        if (dashFilters.type !== 'all' && rec.type !== dashFilters.type) return false;
+        if (dashFilters.condition !== 'all' && rec.condition !== dashFilters.condition) return false;
+        if (dashFilters.status !== 'all' && rec.saisStatus !== dashFilters.status) return false;
+        return true;
+      }), [records, filterMonth, dashFilters]);
+
+      const trendFilteredDash = useMemo(() => records.filter(rec => {
+        if (dashFilters.inspector !== 'all' && rec.inspectorName !== dashFilters.inspector) return false;
+        if (dashFilters.product !== 'all' && rec.productLine !== dashFilters.product) return false;
+        if (dashFilters.type !== 'all' && rec.type !== dashFilters.type) return false;
+        if (dashFilters.condition !== 'all' && rec.condition !== dashFilters.condition) return false;
+        if (dashFilters.status !== 'all' && rec.saisStatus !== dashFilters.status) return false;
+        return true;
+      }), [records, dashFilters]);
+
+      const handleInput = (e) => { setFormData(p => ({ ...p, [e.target.name]: e.target.value })); setValidationError(''); };
+      
+      const handleTableFilter = (e) => {
+         const { name, value } = e.target;
+         setTableFilters(prev => ({ ...prev, [name]: value }));
+      };
+      
+      const hasTableFilters = Object.values(tableFilters).some(v => v !== '');
+      const clearTableFilters = () => setTableFilters({ sys: '', insp: '', prod: '', type: '', unit: '', cond: '', pre: '', buz: '', status: '' });
+
+      const openAddModal = () => { 
+        setFormData({ ...initialFormState, inspectionDate: formatDateForInput(latestInspectionDate) || (filterMonth !== 'all' ? `2026-${filterMonth}-01` : '') }); 
+        setEditId(null); 
+        setValidationError(''); 
+        setIsModalOpen(true); 
+      };
+      
+      const closeModal = () => setIsModalOpen(false);
+      const openViewModal = (r) => setViewRecord(r);
+      const openEditModal = (r) => { 
+        setFormData({ 
+          ...r, 
+          inspectionDate: formatDateForInput(r.inspectionDate),
+          generatedDate: formatDateForInput(r.generatedDate),
+          newRemark: '' 
+        }); 
+        setEditId(r.id); 
+        setValidationError(''); 
+        setIsModalOpen(true); 
+      };
+
+      const syncDb = async (payload, msg) => {
+        try {
+          const res = await fetch(GAS_WEB_APP_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify(payload) });
+          const text = await res.text();
+          let out;
+          try { out = JSON.parse(text); } catch(e) { throw new Error("Invalid Server Response"); }
+          if(out.status === 'success') { setLastSyncedAt(new Date()); showToast(msg); } else throw new Error(out.message || "Unknown Error");
+        } catch (e) { showToast(`Error: ${e.message}`, 'error'); } finally { setIsSubmitting(false); }
+      };
+
+      const handleSubmit = async (e) => {
+        e.preventDefault(); 
+        if (isSubmitting) return; 
+        setValidationError('');
+        
+        try {
+            const req = ['equipmentNo', 'inspectionDate', 'inspectorName', 'productLine', 'type', 'jobSite', 'unit'];
+            const missing = req.filter(f => !formData[f] || String(formData[f]).trim() === '');
+            if (missing.length > 0) return setValidationError(`กรุณากรอกข้อมูลสำคัญให้ครบถ้วน: ${missing.join(', ')}`);
+            
+            const eqString = String(formData.equipmentNo).trim();
+            const eqRegex = /^\d+$/;
+            if (!eqRegex.test(eqString)) return setValidationError('รูปแบบ Eq No. ไม่ถูกต้อง (ต้องเป็นตัวเลขเท่านั้น)');
+
+            if (formData.generatedDate && formData.inspectionDate) {
+              const genDate = new Date(formData.generatedDate);
+              const inspDate = new Date(formData.inspectionDate);
+              genDate.setHours(0,0,0,0); inspDate.setHours(0,0,0,0);
+              if (genDate < inspDate) return setValidationError('วันที่ Gen Date ต้องไม่ก่อนวันที่ Inspection Date');
+            }
+            
+            setIsSubmitting(true);
+            
+            const og = editId ? records.find(r => String(r.id) === String(editId)) : null;
+            let hist = parseRemarkHistory(og?.remark);
+            
+            if (formData.newRemark && String(formData.newRemark).trim()) {
+               hist.push({ text: String(formData.newRemark).trim(), date: formatDateToDDMMYY(new Date()), author: formData.inspectorName || 'System' });
+            }
+
+            const pData = { 
+               ...formData, 
+               equipmentNo: eqString, 
+               displayInspectionDate: formatDateToDDMMYY(formData.inspectionDate), 
+               displayGeneratedDate: formatDateToDDMMYY(formData.generatedDate), 
+               remark: JSON.stringify(hist) 
+            };
+            delete pData.newRemark;
+
+            let target, msg;
+            if (editId) { 
+               target = { ...pData, id: editId }; 
+               setRecords(p => p.map(r => String(r.id) === String(editId) ? target : r)); 
+               msg = 'อัปเดตสำเร็จ'; 
+            } else { 
+               target = { ...pData, id: generateUniqueId() }; 
+               setRecords(p => [target, ...p]); 
+               msg = 'เพิ่มสำเร็จ'; 
+            }
+            
+            closeModal(); 
+            await syncDb({ action: 'SAVE', record: target }, msg);
+            
+        } catch (err) {
+            setValidationError(`ระบบขัดข้อง: ${err.message}`);
+            setIsSubmitting(false);
+        }
+      };
+
+      const handleDelete = (id) => {
+        if(window.confirm('ยืนยันลบถาวร?')) { setIsSubmitting(true); setRecords(p => p.filter(r => String(r.id) !== String(id))); closeModal(); syncDb({ action: 'DELETE', id }, 'ลบสำเร็จ'); }
+      };
+
+      const updateInspectorName = (idx, newName) => { const newData = [...inspectorsData]; newData[idx].name = newName; setInspectorsData(newData); };
+      const toggleCert = (idx, pl, isChecked) => { const newData = [...inspectorsData]; if (isChecked) newData[idx].certs.push(pl); else newData[idx].certs = newData[idx].certs.filter(c => c !== pl); setInspectorsData(newData); };
+      const deleteInspector = (idx) => { if(window.confirm('ลบรายชื่อนี้?')) setInspectorsData(inspectorsData.filter((_, i) => i !== idx)); };
+      const addInspector = () => setInspectorsData([...inspectorsData, { name: 'New Inspector', certs: [] }]);
+
+      const renderDashboard = () => {
+        let stats = { total: 0, perfect: 0, fpy: 0, failed: 0, cancelled: 0 };
+        filteredDash.forEach(r => {
+          if (r.saisStatus === 'ยกเลิก') { stats.cancelled++; return; }
+          stats.total++;
+          if (r.saisStatus === 'Passed with Completed') stats.perfect++;
+          if (r.saisStatus === 'Passed with Completed' || r.saisStatus === 'Passed with OIL') stats.fpy++;
+          if (r.saisStatus === 'Failed') stats.failed++;
+        });
+        const fpyRate = stats.total > 0 ? Math.round((stats.fpy / stats.total) * 100) : 0;
+        const perfectRate = stats.total > 0 ? Math.round((stats.perfect / stats.total) * 100) : 0;
+
+        const statusRawData = [
+          { label: 'Passed (FPY)', value: stats.fpy, color: '#10b981' }, 
+          { label: 'Failed Defect', value: stats.failed, color: '#ef4444' } 
+        ].filter(d => d.value > 0);
+        
+        const totalStatus = statusRawData.reduce((acc, curr) => acc + curr.value, 0);
+        let accPercent = 0;
+        const donutSegments = statusRawData.map(d => {
+           const percent = totalStatus > 0 ? (d.value / totalStatus) * 100 : 0;
+           const dashArray = `${percent} ${100 - percent}`;
+           const dashOffset = 25 - accPercent;
+           accPercent += percent;
+           return { ...d, percent, dashArray, dashOffset };
+        });
+
+        const productStats = {};
+        filteredDash.forEach(r => {
+           if (r.saisStatus === 'ยกเลิก') return;
+           if(!r.productLine) return;
+           if(!productStats[r.productLine]) productStats[r.productLine] = { total: 0, failed: 0 };
+           productStats[r.productLine].total++;
+           if(r.saisStatus === 'Failed') productStats[r.productLine].failed++;
+        });
+        const barData = Object.entries(productStats).map(([name, data]) => ({ name, ...data })).sort((a,b) => b.total - a.total).slice(0, 8); 
+        const maxBar = Math.max(...barData.map(d => d.total), 1);
+
+        const inspectorStats = {};
+        filteredDash.forEach(r => {
+           if (r.saisStatus === 'ยกเลิก') return;
+           if(!r.inspectorName) return;
+           if(!inspectorStats[r.inspectorName]) inspectorStats[r.inspectorName] = { total: 0, fpy: 0 };
+           inspectorStats[r.inspectorName].total++;
+           if(r.saisStatus === 'Passed with Completed' || r.saisStatus === 'Passed with OIL') inspectorStats[r.inspectorName].fpy++;
+        });
+        const leaderboardData = Object.entries(inspectorStats).map(([name, data]) => ({ name, ...data })).sort((a,b) => b.total - a.total);
+
+        const monthNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+        const trendData = monthNames.map(m => ({ month: m, total: 0, fpy: 0, perfect: 0 }));
+        
+        trendFilteredDash.forEach(r => {
+            if (r.saisStatus === 'ยกเลิก') return;
+            if(!r.inspectionDate) return;
+            const d = new Date(r.inspectionDate);
+            if(!isNaN(d.getTime())) {
+                const mIdx = d.getMonth();
+                trendData[mIdx].total++;
+                if(r.saisStatus === 'Passed with Completed' || r.saisStatus === 'Passed with OIL') trendData[mIdx].fpy++;
+                if(r.saisStatus === 'Passed with Completed') trendData[mIdx].perfect++;
+            }
+        });
+        const maxTrend = Math.max(...trendData.map(d => d.total), 1);
+
+        return (
+          <div className="space-y-4 fade-in pb-10">
+            <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-200">
+              <div className="flex justify-between items-center mb-4 border-b pb-2"><div className="flex items-center gap-2 font-bold text-sm"><Filter className="w-5 h-5 text-[#E20015]"/> Analytics Engine</div><button onClick={()=>setDashFilters({inspector:'all',product:'all',type:'all',condition:'all',status:'all'})} className="text-xs flex gap-1 text-gray-500 hover:text-[#E20015] bg-gray-50 px-2 py-1 rounded font-bold"><RotateCcw className="w-3.5 h-3.5"/> ล้าง</button></div>
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
+                {['inspector','product','type','condition','status'].map(f => (
+                  <select key={f} value={dashFilters[f]} onChange={(e)=>setDashFilters(p=>({...p,[f]:e.target.value}))} className="w-full bg-gray-50 border rounded-lg p-2 text-xs font-bold outline-none focus:ring-1 focus:ring-[#E20015] capitalize"><option value="all">{f} (All)</option>{(f==='inspector'?inspectorsData.map(i=>i.name):f==='product'?PRODUCT_LINES:f==='type'?TYPES:f==='condition'?CONDITIONS:f==='status'?SAIS_STATUSES:[]).map(o=><option key={o} value={o}>{o}</option>)}</select>
+                ))}
+              </div>
+            </div>
+
+            {filteredDash.length === 0 ? <div className="bg-white rounded-xl shadow-sm p-10 text-center"><Activity className="w-12 h-12 text-gray-200 mx-auto mb-2 animate-pulse"/><h3 className="font-bold text-gray-500">ไม่พบข้อมูล</h3></div> : (
+              <>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="bg-white p-5 rounded-xl border border-blue-200 shadow-sm flex flex-col justify-center relative overflow-hidden">
+                     <div className="absolute -right-4 -bottom-4 opacity-10"><Target className="w-24 h-24 text-blue-500" /></div>
+                     <span className="text-[10px] font-bold text-blue-600 uppercase mb-1">First Pass Yield</span>
+                     <div className="text-3xl font-black text-gray-800">{fpyRate}%</div>
+                     <span className="text-[10px] text-gray-500 mt-1">ตรวจผ่าน (ไม่ Failed)</span>
+                  </div>
+                  <div className="bg-white p-5 rounded-xl border border-red-200 shadow-sm flex flex-col justify-center relative overflow-hidden">
+                     <div className="absolute -right-4 -bottom-4 opacity-10"><ShieldAlert className="w-24 h-24 text-red-500" /></div>
+                     <span className="text-[10px] font-bold text-red-600 uppercase mb-1">Failed Defects</span>
+                     <div className="text-3xl font-black text-gray-800">{stats.failed} <span className="text-sm text-gray-400">งาน</span></div>
+                     <span className="text-[10px] text-gray-500 mt-1">ต้องแก้ไข (Rework)</span>
+                  </div>
+                  <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm flex flex-col justify-center relative overflow-hidden">
+                     <div className="absolute -right-4 -bottom-4 opacity-10"><Package className="w-24 h-24 text-gray-500" /></div>
+                     <span className="text-[10px] font-bold text-gray-600 uppercase mb-1">Total Inspected</span>
+                     <div className="text-3xl font-black text-gray-800">{stats.total} <span className="text-sm text-gray-400">งาน</span></div>
+                     <span className="text-[10px] text-gray-500 mt-1">ยอดเข้าตรวจทั้งหมด</span>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                   <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm flex flex-col">
+                      <h3 className="text-sm font-bold text-gray-700 flex items-center gap-2 mb-4"><PieChart className="w-4 h-4 text-blue-500"/> สัดส่วนผลการตรวจ</h3>
+                      <div className="flex flex-1 items-center justify-center gap-6">
+                         {totalStatus === 0 ? <span className="text-gray-400 text-xs font-bold">ไม่มีข้อมูล</span> : (
+                           <>
+                              <div className="w-32 h-32 relative svg-chart">
+                                <svg viewBox="0 0 36 36" className="w-full h-full transform -rotate-90">
+                                   {donutSegments.map((s, i) => (
+                                     <circle key={i} cx="18" cy="18" r="15.9155" fill="transparent" stroke={s.color} strokeWidth="4" strokeDasharray={s.dashArray} strokeDashoffset={s.dashOffset} />
+                                   ))}
+                                </svg>
+                                <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                                   <span className="text-2xl font-black text-gray-800 leading-none">{totalStatus}</span>
+                                   <span className="text-[10px] font-bold text-gray-400">TOTAL</span>
+                                </div>
+                              </div>
+                              <div className="space-y-2 text-xs">
+                                 {donutSegments.map((s, i) => (
+                                    <div key={i} className="flex items-center gap-2">
+                                       <div className="w-3 h-3 rounded-sm" style={{backgroundColor: s.color}}></div>
+                                       <span className="font-bold text-gray-700 w-24 truncate">{s.label}</span>
+                                       <span className="text-gray-500 font-medium">{Math.round(s.percent)}% <span className="text-[10px]">({s.value})</span></span>
+                                    </div>
+                                 ))}
+                              </div>
+                           </>
+                         )}
+                      </div>
+                   </div>
+
+                   <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm flex flex-col">
+                      <h3 className="text-sm font-bold text-gray-700 flex items-center gap-2 mb-4"><BarChart2 className="w-4 h-4 text-indigo-500"/> ผลงานตาม Product Line (Top 8)</h3>
+                      <div className="flex-1 w-full h-40 svg-chart relative">
+                         {barData.length === 0 ? <div className="absolute inset-0 flex justify-center items-center text-xs font-bold text-gray-400">ไม่มีข้อมูล</div> : (
+                           <svg viewBox="0 0 400 160" className="w-full h-full preserve-3d">
+                              {barData.map((d, i) => {
+                                  const barWidth = 360 / barData.length - 8;
+                                  const barHeight = (d.total / maxBar) * 120;
+                                  const x = i * (barWidth + 8) + 20;
+                                  const y = 140 - barHeight;
+                                  const color = d.failed > 0 ? '#ef4444' : '#6366f1'; 
+                                  return (
+                                     <g key={i}>
+                                        <rect x={x} y={y} width={barWidth} height={barHeight} fill={color} rx="2" className="transition-all duration-300" />
+                                        <text x={x + barWidth/2} y={155} fontSize="9" textAnchor="middle" fill="#6b7280" className="uppercase font-bold">{d.name.substring(0,6)}</text>
+                                        <text x={x + barWidth/2} y={y - 5} fontSize="10" textAnchor="middle" fill={color} fontWeight="bold">{d.total}</text>
+                                     </g>
+                                  )
+                              })}
+                           </svg>
+                         )}
+                      </div>
+                      <div className="text-[9px] text-gray-400 text-center mt-1">* แท่งสีแดง = มีสถานะ Failed ปะปนอยู่</div>
+                   </div>
+                </div>
+
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                   <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm lg:col-span-2 flex flex-col">
+                      <h3 className="text-sm font-bold text-gray-700 flex items-center gap-2 mb-4"><TrendingUp className="w-4 h-4 text-blue-500"/> เทรนด์คุณภาพรายเดือน (ภาพรวมทั้งปี)</h3>
+                      <div className="flex-1 w-full h-48 svg-chart relative">
+                         <svg viewBox="0 0 500 180" className="w-full h-full">
+                            <line x1="30" y1="20" x2="480" y2="20" stroke="#f3f4f6" strokeWidth="1" />
+                            <line x1="30" y1="80" x2="480" y2="80" stroke="#f3f4f6" strokeWidth="1" />
+                            <line x1="30" y1="140" x2="480" y2="140" stroke="#f3f4f6" strokeWidth="1" />
+                            <text x="25" y="24" fontSize="9" textAnchor="end" fill="#9ca3af">{maxTrend}</text>
+                            <text x="25" y="84" fontSize="9" textAnchor="end" fill="#9ca3af">{Math.round(maxTrend/2)}</text>
+                            <text x="25" y="144" fontSize="9" textAnchor="end" fill="#9ca3af">0</text>
+                            
+                            {(() => {
+                                const step = 450 / 11;
+                                const pointsTotal = trendData.map((d,i) => `${40 + i*step},${140 - (d.total/maxTrend)*120}`).join(' ');
+                                const pointsFpy = trendData.map((d,i) => `${40 + i*step},${140 - (d.fpy/maxTrend)*120}`).join(' ');
+                                
+                                return (
+                                   <>
+                                      <polyline points={pointsTotal} fill="none" stroke="#d1d5db" strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
+                                      <polyline points={pointsFpy} fill="none" stroke="#3b82f6" strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
+                                      {trendData.map((d,i) => (
+                                         <g key={i}>
+                                           <circle cx={40 + i*step} cy={140 - (d.total/maxTrend)*120} r="3" fill="#d1d5db" />
+                                           <circle cx={40 + i*step} cy={140 - (d.fpy/maxTrend)*120} r="3" fill="#3b82f6" />
+                                           <text x={40 + i*step} y={160} fontSize="9" textAnchor="middle" fill="#6b7280" fontWeight="bold">{d.month}</text>
+                                           {d.total > 0 && <text x={40 + i*step} y={140 - (d.total/maxTrend)*120 - 8} fontSize="8" textAnchor="middle" fill="#9ca3af">{d.total}</text>}
+                                         </g>
+                                      ))}
+                                   </>
+                                )
+                            })()}
+                         </svg>
+                      </div>
+                      <div className="flex justify-center gap-4 mt-2 text-[10px] font-bold">
+                         <div className="flex items-center gap-1"><span className="w-3 h-1 bg-gray-300 rounded-full"></span> Total Inspected</div>
+                         <div className="flex items-center gap-1"><span className="w-3 h-1 bg-blue-500 rounded-full"></span> FPY (Pass/OIL)</div>
+                      </div>
+                   </div>
+
+                   <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm flex flex-col">
+                      <h3 className="text-sm font-bold text-gray-700 flex items-center gap-2 mb-4"><Users className="w-4 h-4 text-purple-500"/> Inspector Leaderboard</h3>
+                      <div className="flex-1 overflow-y-auto custom-scrollbar pr-2 space-y-3 max-h-48">
+                         {leaderboardData.length === 0 ? <div className="text-center text-xs font-bold text-gray-400 mt-10">ไม่มีข้อมูล</div> : (
+                            leaderboardData.map((d, i) => {
+                               const rate = d.total > 0 ? Math.round((d.fpy / d.total) * 100) : 0;
+                               return (
+                               <div key={i} className="flex items-center justify-between">
+                                  <div className="flex items-center gap-2">
+                                     <div className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-black ${i===0?'bg-yellow-100 text-yellow-700':i===1?'bg-gray-100 text-gray-600':i===2?'bg-orange-50 text-orange-700':'bg-gray-50 text-gray-400'}`}>
+                                        {i+1}
+                                     </div>
+                                     <div className="text-xs font-bold text-gray-700 w-24 truncate">{d.name}</div>
+                                  </div>
+                                  <div className="flex items-center gap-2 text-xs">
+                                     <span className={`px-1.5 py-0.5 rounded text-[9px] font-black ${rate === 100 ? 'bg-green-100 text-green-700' : rate >= 80 ? 'bg-blue-50 text-blue-600' : 'bg-red-50 text-red-600'}`}>
+                                       FPY {rate}%
+                                     </span>
+                                     <span className="font-black text-gray-900 bg-gray-100 px-2 py-0.5 rounded" title="Total Inspected">{d.total}</span>
+                                  </div>
+                               </div>
+                               )
+                            })
+                         )}
+                      </div>
+                   </div>
+                   
+                </div>
+              </>
+            )}
+          </div>
+        );
+      };
+
+      return (
+        <div className="min-h-screen p-2 sm:p-4 md:p-6 pb-24 md:pb-28 relative">
+          {toast && <div className="fixed top-4 right-4 z-50 toast-enter"><div className={`flex items-center gap-2 px-4 py-3 rounded-lg shadow-lg text-sm font-bold text-white ${toast.type==='error'?'bg-red-600':'bg-green-600'}`}>{toast.message}</div></div>}
+          
+          <div className="max-w-[1450px] mx-auto space-y-4">
+            <div className="bg-white rounded-xl shadow-sm border-t-4 border-[#E20015] p-4 flex flex-col sm:flex-row justify-between items-start sm:items-center relative">
+              <div className="absolute top-2 right-2 flex items-center bg-gray-50 rounded px-2 py-1 z-10 text-[10px] font-bold text-gray-500">
+                {syncStatus==='syncing'?<><RefreshCw className="w-3 h-3 text-blue-500 animate-spin mr-1"/> โหลด...</>:syncStatus==='success'?<><Cloud className="w-3 h-3 text-green-600 mr-1"/> {formatSyncTime(lastSyncedAt)}</>:<><CloudOff className="w-3 h-3 text-red-500 mr-1"/> ล้มเหลว</>}
+              </div>
+              <div className="flex items-center gap-3 w-full justify-between mt-4 sm:mt-0">
+                <div className="flex items-center gap-3">
+                   <div className="bg-[#E20015] p-2 rounded-lg text-white hidden sm:block"><Building2 className="w-6 h-6" /></div>
+                   <div><h1 className="text-xl sm:text-2xl font-black text-gray-900 leading-none">SAIS <span className="text-[#E20015]">DATABASE</span> 2026</h1><div className="flex items-center gap-2 mt-2"><span className="text-xs font-bold text-gray-500">รอบ:</span><select value={filterMonth} onChange={(e)=>setFilterMonth(e.target.value)} className="bg-gray-100 border text-xs font-bold rounded p-1 outline-none">{MONTHS.map(m=><option key={m.value} value={m.value}>{m.label}</option>)}</select></div></div>
+                </div>
+                <button onClick={() => setIsSettingsOpen(true)} className="p-2 bg-gray-100 hover:bg-gray-200 rounded-full text-gray-600 transition-colors" title="ตั้งค่ารายชื่อ Inspector">
+                  <Settings className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+
+            {activeTab === 'dashboard' ? renderDashboard() : (
+              <div className="bg-white rounded-xl shadow-sm border border-gray-200 fade-in flex flex-col">
+                <div className="p-3 border-b flex flex-col sm:flex-row justify-between items-center gap-3 bg-gray-50">
+                  <h3 className="font-bold text-sm flex items-center gap-2">
+                    <FileSpreadsheet className="text-blue-600 w-4 h-4"/> 
+                    DATABASE RECORDS 
+                    <span className="bg-gray-800 text-white text-[10px] px-2 rounded-full">{displayedRecords.length}</span>
+                  </h3>
+                  <div className="flex w-full sm:w-auto gap-2">
+                    {hasTableFilters && (
+                       <button onClick={clearTableFilters} className="flex items-center justify-center gap-1 bg-red-50 text-red-600 px-3 py-1.5 rounded-md font-bold text-xs shrink-0 border border-red-200 active:scale-95">
+                          <X className="w-3 h-3" /> ล้างตัวกรอง
+                       </button>
+                    )}
+                    <div className="relative w-full sm:w-48"><Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" /><input type="text" placeholder="Eq No / Site..." value={searchTerm} onChange={(e)=>setSearchTerm(e.target.value)} className="w-full bg-white border rounded-md pl-8 pr-2 py-1.5 text-xs outline-none focus:border-[#E20015]" /></div>
+                    <button onClick={openAddModal} className="flex items-center gap-1 bg-[#E20015] text-white px-3 py-1.5 rounded-md font-bold text-xs shrink-0 active:scale-95"><Plus className="w-3.5 h-3.5" /> <span className="hidden sm:inline">เพิ่มข้อมูล</span></button>
+                  </div>
+                </div>
+                
+                <div className="overflow-x-auto overflow-y-hidden custom-scrollbar max-h-[60vh]">
+                  <table className="w-full text-xs text-left whitespace-nowrap min-w-max">
+                    <thead className="sticky-header uppercase text-[10px] text-gray-500">
+                      <tr>
+                        <th className="px-2 py-2 border-r text-center align-top min-w-[40px]">
+                           <div className="pb-1">No.</div>
+                        </th>
+                        <th className="px-2 py-2 border-r text-center align-top min-w-[70px]">
+                           <div className="pb-1">Insp. Date</div>
+                        </th>
+                        <th className="px-2 py-2 border-r text-[#E20015] align-top min-w-[100px]">
+                           <div className="pb-1">Equipment No.</div>
+                        </th>
+                        <th className="px-2 py-2 border-r text-gray-400 align-top min-w-[80px]">
+                           <div className="pb-1">Gen. Date</div>
+                        </th>
+                        
+                        <th className="px-2 py-2 border-r text-gray-400 text-center align-top min-w-[70px]">
+                           <div className="pb-1">Sys</div>
+                           <select name="sys" value={tableFilters.sys} onChange={handleTableFilter} onClick={e=>e.stopPropagation()} className="w-full border rounded bg-white text-gray-800 p-0.5 outline-none font-bold cursor-pointer hover:border-gray-400"><option value="">ทั้งหมด</option>{uniqueTableOptions.sys.map(x=><option key={x} value={x}>{x}</option>)}</select>
+                        </th>
+                        
+                        <th className="px-2 py-2 border-r align-top min-w-[120px]">
+                           <div className="pb-1">Inspector</div>
+                           <select name="insp" value={tableFilters.insp} onChange={handleTableFilter} onClick={e=>e.stopPropagation()} className="w-full border rounded bg-white text-gray-800 p-0.5 outline-none font-bold cursor-pointer hover:border-gray-400"><option value="">ทั้งหมด</option>{uniqueTableOptions.insp.map(x=><option key={x} value={x}>{x}</option>)}</select>
+                        </th>
+                        
+                        <th className="px-2 py-2 border-r text-center align-top min-w-[80px]">
+                           <div className="pb-1">Prod</div>
+                           <select name="prod" value={tableFilters.prod} onChange={handleTableFilter} onClick={e=>e.stopPropagation()} className="w-full border rounded bg-white text-gray-800 p-0.5 outline-none font-bold cursor-pointer hover:border-gray-400"><option value="">ทั้งหมด</option>{uniqueTableOptions.prod.map(x=><option key={x} value={x}>{x}</option>)}</select>
+                        </th>
+                        
+                        <th className="px-2 py-2 border-r text-center align-top min-w-[80px]">
+                           <div className="pb-1">Type</div>
+                           <select name="type" value={tableFilters.type} onChange={handleTableFilter} onClick={e=>e.stopPropagation()} className="w-full border rounded bg-white text-gray-800 p-0.5 outline-none font-bold cursor-pointer hover:border-gray-400"><option value="">ทั้งหมด</option>{uniqueTableOptions.type.map(x=><option key={x} value={x}>{x}</option>)}</select>
+                        </th>
+                        
+                        <th className="px-2 py-2 border-r align-top"><div className="pb-1">Site</div></th>
+                        
+                        <th className="px-2 py-2 border-r text-center align-top min-w-[70px]">
+                           <div className="pb-1">Unit</div>
+                           <select name="unit" value={tableFilters.unit} onChange={handleTableFilter} onClick={e=>e.stopPropagation()} className="w-full border rounded bg-white text-gray-800 p-0.5 outline-none font-bold cursor-pointer hover:border-gray-400"><option value="">ทั้งหมด</option>{uniqueTableOptions.unit.map(x=><option key={x} value={x}>{x}</option>)}</select>
+                        </th>
+                        
+                        <th className="px-2 py-2 border-r text-center align-top min-w-[90px]">
+                           <div className="pb-1">Cond</div>
+                           <select name="cond" value={tableFilters.cond} onChange={handleTableFilter} onClick={e=>e.stopPropagation()} className="w-full border rounded bg-white text-gray-800 p-0.5 outline-none font-bold cursor-pointer hover:border-gray-400"><option value="">ทั้งหมด</option>{uniqueTableOptions.cond.map(x=><option key={x} value={x}>{x}</option>)}</select>
+                        </th>
+                        
+                        <th className="px-2 py-2 border-r text-gray-400 text-center align-top min-w-[70px]">
+                           <div className="pb-1">Pre</div>
+                           <select name="pre" value={tableFilters.pre} onChange={handleTableFilter} onClick={e=>e.stopPropagation()} className="w-full border rounded bg-white text-gray-800 p-0.5 outline-none font-bold cursor-pointer hover:border-gray-400"><option value="">ทั้งหมด</option>{uniqueTableOptions.pre.map(x=><option key={x} value={x}>{x}</option>)}</select>
+                        </th>
+                        
+                        <th className="px-2 py-2 border-r text-gray-400 text-center align-top min-w-[70px]">
+                           <div className="pb-1">Buz</div>
+                           <select name="buz" value={tableFilters.buz} onChange={handleTableFilter} onClick={e=>e.stopPropagation()} className="w-full border rounded bg-white text-gray-800 p-0.5 outline-none font-bold cursor-pointer hover:border-gray-400"><option value="">ทั้งหมด</option>{uniqueTableOptions.buz.map(x=><option key={x} value={x}>{x}</option>)}</select>
+                        </th>
+                        
+                        <th className="px-2 py-2 border-r max-w-[200px] align-top"><div className="pb-1">Remark/Comment</div></th>
+                        
+                        <th className="px-2 py-2 text-center align-top min-w-[100px]">
+                           <div className="pb-1">Status</div>
+                           <select name="status" value={tableFilters.status} onChange={handleTableFilter} onClick={e=>e.stopPropagation()} className="w-full border rounded bg-white text-gray-800 p-0.5 outline-none font-bold cursor-pointer hover:border-gray-400"><option value="">ทั้งหมด</option>{uniqueTableOptions.status.map(x=><option key={x} value={x}>{x}</option>)}</select>
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                      {processedPaginatedRecords.length === 0 ? <tr><td colSpan="20" className="py-10 text-center text-gray-400 text-xs">ไม่พบข้อมูล</td></tr> : processedPaginatedRecords.map((r, i) => (
+                        <tr key={r.id} onClick={()=>openViewModal(r)} className={`hover:bg-blue-50 cursor-pointer ${r.bgClass} ${r.saisStatus==='ยกเลิก'?'opacity-50':''}`}>
+                          <td className="px-3 py-2 border-r text-center text-gray-400">{(currentPage-1)*ITEMS_PER_PAGE+i+1}</td>
+                          <td className="px-3 py-2 border-r font-medium text-center whitespace-nowrap">{r.showDate ? r.displayDateFormatted : ''}</td>
+                          <td className="px-3 py-2 border-r font-black text-gray-900 group-hover:bg-blue-50">{r.equipmentNo}</td>
+                          <td className="px-3 py-2 border-r text-gray-400">{formatDateToDDMMYY(r.generatedDate)}</td>
+                          <td className="px-3 py-2 border-r text-gray-400 text-center">{r.generatedInSystem||'-'}</td>
+                          <td className="px-3 py-2 border-r font-bold">{r.inspectorName}</td>
+                          <td className="px-3 py-2 border-r text-center">{r.productLine}</td>
+                          <td className="px-3 py-2 border-r text-center">{r.type}</td>
+                          <td className="px-3 py-2 border-r truncate max-w-[150px]">{r.jobSite}</td>
+                          <td className="px-3 py-2 border-r text-center">{r.unit}</td>
+                          <td className="px-3 py-2 border-r text-center">{r.condition||'-'}</td>
+                          <td className="px-3 py-2 border-r text-gray-400 text-center">{r.preCheck||'-'}</td>
+                          <td className="px-3 py-2 border-r text-gray-400 text-center">{r.buzzer||'-'}</td>
+                          <td className="px-3 py-2 border-r truncate max-w-[150px] text-gray-500">
+                            {(() => { 
+                               const h = parseRemarkHistory(r.remark); 
+                               return h.length > 0 && h[0].text ? <span className="flex items-center gap-1 text-yellow-700"><MessageSquare className="w-3 h-3"/> {h[h.length-1].text}</span> : '-'; 
+                            })()}
+                          </td>
+                          <td className="px-3 py-2 text-center">
+                            <span className={`px-2 py-0.5 rounded text-[9px] font-bold border ${r.saisStatus==='Passed with Completed'?'bg-emerald-100 text-emerald-700 border-emerald-200':r.saisStatus==='Failed'?'bg-red-100 text-red-700 border-red-200':r.saisStatus==='Passed with OIL'?'bg-amber-100 text-amber-700 border-amber-200':r.saisStatus==='ยกเลิก'?'bg-gray-800 text-gray-300 border-gray-900':'bg-white text-gray-500 border-gray-200'}`}>
+                              {r.saisStatus||'PENDING'}
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <div className="flex justify-between items-center p-3 bg-gray-50 border-t">
+                  <span className="text-[10px] font-bold text-gray-500">แสดง {processedPaginatedRecords.length>0?(currentPage-1)*ITEMS_PER_PAGE+1:0} - {Math.min(currentPage*ITEMS_PER_PAGE, displayedRecords.length)} จาก {displayedRecords.length}</span>
+                  <div className="flex items-center gap-2"><button disabled={currentPage===1} onClick={()=>setCurrentPage(p=>p-1)} className="p-1 bg-white border rounded disabled:opacity-30"><ChevronLeft className="w-4 h-4"/></button><span className="text-[10px] font-bold px-1">{currentPage} / {totalPages||1}</span><button disabled={currentPage>=totalPages||totalPages===0} onClick={()=>setCurrentPage(p=>p+1)} className="p-1 bg-white border rounded disabled:opacity-30"><ChevronRight className="w-4 h-4"/></button></div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div className={`fixed bottom-0 left-0 right-0 bg-white border-t z-40 pb-safe transition-transform ${isNavVisible?'translate-y-0':'translate-y-full'}`}>
+            <div className="max-w-[1450px] mx-auto flex justify-around p-1.5">
+              <button onClick={()=>{setActiveTab('records');window.scrollTo(0,0);}} className={`flex flex-col items-center w-1/2 py-1.5 rounded-lg ${activeTab==='records'?'text-[#E20015] bg-red-50 font-bold':'text-gray-400'}`}>
+                <FileSpreadsheet className="w-4 h-4"/><span className="text-[9px]">RECORDS</span>
+              </button>
+              <button onClick={()=>{setActiveTab('dashboard');window.scrollTo(0,0);}} className={`flex flex-col items-center w-1/2 py-1.5 rounded-lg ${activeTab==='dashboard'?'text-[#E20015] bg-red-50 font-bold':'text-gray-400'}`}>
+                <BarChart2 className="w-4 h-4"/><span className="text-[9px]">DASHBOARD</span>
+              </button>
+            </div>
+          </div>
+
+          {/* ============================== */}
+          {/* Settings Modal */}
+          {/* ============================== */}
+          {isSettingsOpen && (
+            <div className="fixed inset-0 bg-black/60 z-50 flex justify-center items-end sm:items-center sm:p-4">
+              <div className="bg-white w-full sm:h-auto sm:rounded-xl sm:max-w-3xl h-[85vh] sm:max-h-[85vh] flex flex-col slide-up">
+                
+                <div className="bg-gray-50 p-3 border-b flex justify-between items-center rounded-t-xl shrink-0">
+                  <div className="flex items-center gap-2 font-black text-sm">
+                    <Settings className="w-4 h-4 text-blue-600" /> จัดการรายชื่อ Inspector & Certificates
+                  </div>
+                  <button onClick={() => setIsSettingsOpen(false)}>
+                    <X className="w-4 h-4 text-gray-500" />
+                  </button>
+                </div>
+                
+                <div className="p-4 overflow-y-auto custom-scrollbar flex-1 space-y-4">
+                  <p className="text-xs text-gray-500 bg-blue-50 p-2 rounded">
+                    ข้อมูลการตั้งค่านี้จะถูกบันทึกไว้ในเบราว์เซอร์เครื่องที่คุณกำลังใช้งานเท่านั้น
+                  </p>
+                  
+                  {inspectorsData.map((insp, idx) => (
+                    <div key={idx} className="border rounded-lg p-3 bg-white">
+                      <div className="flex justify-between items-center mb-2">
+                        <input 
+                          type="text" 
+                          value={insp.name} 
+                          onChange={(e) => updateInspectorName(idx, e.target.value)} 
+                          className="font-bold border-b border-dashed outline-none px-1 py-0.5 w-full max-w-[200px]" 
+                          placeholder="ชื่อ-สกุล" 
+                        />
+                        <button onClick={() => deleteInspector(idx)} className="text-red-500 p-1 hover:bg-red-50 rounded">
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                      <div className="text-[10px] font-bold text-gray-500 mb-2 uppercase">Product Lines (Certificates):</div>
+                      <div className="flex flex-wrap gap-2">
+                        {PRODUCT_LINES.map(pl => (
+                          <label 
+                            key={pl} 
+                            className={`flex items-center gap-1 text-[10px] px-2 py-1 rounded border cursor-pointer select-none transition-colors ${insp.certs.includes(pl) ? 'bg-blue-50 border-blue-300 text-blue-700 font-bold' : 'bg-gray-50 text-gray-500 hover:bg-gray-100'}`}
+                          >
+                            <input 
+                              type="checkbox" 
+                              className="hidden" 
+                              checked={insp.certs.includes(pl)} 
+                              onChange={(e) => toggleCert(idx, pl, e.target.checked)} 
+                            />
+                            {insp.certs.includes(pl) && <CheckCircle2 className="w-3 h-3" />}
+                            {pl}
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                  
+                  <button onClick={addInspector} className="w-full py-3 border-2 border-dashed rounded-lg text-gray-500 font-bold flex items-center justify-center gap-1 hover:bg-gray-50 transition-colors">
+                    <Plus className="w-4 h-4" /> เพิ่มรายชื่อ Inspector
+                  </button>
+                </div>
+                
+                <div className="bg-gray-50 p-3 border-t flex justify-end shrink-0">
+                  <button onClick={() => setIsSettingsOpen(false)} className="px-5 py-2 bg-[#E20015] text-white rounded font-bold">
+                    บันทึกและปิดหน้าต่าง
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ========================== */}
+          {/* Form Modal */}
+          {/* ========================== */}
+          {isModalOpen && (
+            <div className="fixed inset-0 bg-black/60 z-50 flex justify-center items-end sm:items-center sm:p-4">
+              <div className="bg-white w-full sm:rounded-xl sm:max-w-3xl max-h-[95vh] flex flex-col slide-up">
+                
+                {/* Modal Header */}
+                <div className="bg-gray-50 p-3 border-b flex justify-between items-center rounded-t-xl">
+                  <h2 className="font-black text-sm">{editId ? 'อัปเดตข้อมูล' : 'เพิ่มข้อมูลใหม่'}</h2>
+                  <button onClick={closeModal}>
+                    <X className="w-4 h-4 text-gray-500" />
+                  </button>
+                </div>
+                
+                {/* Modal Body */}
+                <div className="p-4 overflow-y-auto custom-scrollbar text-xs">
+                  {validationError && (
+                    <div className="mb-3 p-3 bg-red-50 text-red-700 rounded-lg flex items-center gap-2 font-bold border border-red-200">
+                      <AlertCircle className="w-4 h-4 shrink-0" /> 
+                      <span className="flex-1">{validationError}</span>
+                    </div>
+                  )}
+                  
+                  <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                    
+                    <div className="space-y-1">
+                      <label className="font-bold text-gray-500 uppercase">Eq No. *</label>
+                      <input 
+                        type="text" 
+                        name="equipmentNo" 
+                        value={formData.equipmentNo} 
+                        onChange={handleInput} 
+                        className="w-full border rounded p-2 focus:ring-1 outline-none font-black text-[#E20015]" 
+                      />
+                    </div>
+                    
+                    <div className="space-y-1">
+                      <label className="font-bold text-gray-500 uppercase">Date *</label>
+                      <input 
+                        type="date" 
+                        name="inspectionDate" 
+                        value={formData.inspectionDate} 
+                        onChange={handleInput} 
+                        className="w-full border rounded p-2 focus:ring-1 outline-none" 
+                      />
+                    </div>
+                    
+                    <div className="space-y-1">
+                      <label className="font-bold text-gray-500 uppercase">Inspector *</label>
+                      <select name="inspectorName" value={formData.inspectorName} onChange={handleInput} className="w-full border rounded p-2 focus:ring-1 outline-none">
+                        <option value="">-- เลือก --</option>
+                        {inspectorsData.map(o => (
+                          <option key={o.name} value={o.name}>{o.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                    
+                    <div className="space-y-1">
+                      <label className="font-bold text-gray-500 uppercase">Product *</label>
+                      {(() => { 
+                        const selInsp = inspectorsData.find(i => i.name === formData.inspectorName); 
+                        const availablePLs = selInsp ? selInsp.certs : PRODUCT_LINES;
+                        return (
+                          <select name="productLine" value={formData.productLine} onChange={handleInput} className="w-full border rounded p-2 focus:ring-1 outline-none">
+                            <option value="">-- เลือก --</option>
+                            {availablePLs.map(o => (
+                              <option key={o} value={o}>{o}</option>
+                            ))}
+                          </select>
+                        );
+                      })()}
+                    </div>
+                    
+                    <div className="space-y-1">
+                      <label className="font-bold text-gray-500 uppercase">Type *</label>
+                      <select name="type" value={formData.type} onChange={handleInput} className="w-full border rounded p-2 focus:ring-1 outline-none">
+                        <option value="">-- เลือก --</option>
+                        {TYPES.map(o => (
+                          <option key={o} value={o}>{o}</option>
+                        ))}
+                      </select>
+                    </div>
+                    
+                    <div className="space-y-1 col-span-2">
+                      <label className="font-bold text-gray-500 uppercase">Site *</label>
+                      <input 
+                        type="text" 
+                        name="jobSite" 
+                        value={formData.jobSite} 
+                        onChange={handleInput} 
+                        className="w-full border rounded p-2 focus:ring-1 outline-none" 
+                      />
+                    </div>
+                    
+                    <div className="space-y-1">
+                      <label className="font-bold text-gray-500 uppercase">Unit *</label>
+                      <div className="flex flex-col gap-1">
+                         <select 
+                            value={STANDARD_UNITS.includes(formData.unit) ? formData.unit : (formData.unit ? 'OTHER' : '')} 
+                            onChange={(e) => {
+                               if(e.target.value === 'OTHER') {
+                                  handleInput({ target: { name: 'unit', value: ' ' } });
+                               } else {
+                                  handleInput({ target: { name: 'unit', value: e.target.value } });
+                               }
+                            }}
+                            className="w-full border rounded p-2 focus:ring-1 outline-none"
+                         >
+                            <option value="">-- เลือก --</option>
+                            {STANDARD_UNITS.map(u => <option key={u} value={u}>{u}</option>)}
+                            <option value="OTHER">อื่นๆ (พิมพ์เอง)</option>
+                         </select>
+                         {(!STANDARD_UNITS.includes(formData.unit) && formData.unit !== '') && (
+                            <input 
+                               type="text" 
+                               name="unit" 
+                               value={formData.unit.trim()} 
+                               onChange={handleInput} 
+                               placeholder="พิมพ์ Unit ที่นี่..." 
+                               className="w-full border rounded p-2 focus:ring-1 outline-none fade-in border-blue-300 bg-blue-50" 
+                            />
+                         )}
+                      </div>
+                    </div>
+
+                    <div className="col-span-2 lg:col-span-4 border-t my-1"></div>
+                    
+                    <div className="space-y-1 col-span-2 lg:col-span-1">
+                      <label className="font-bold text-blue-700 uppercase">Status</label>
+                      <select name="saisStatus" value={formData.saisStatus} onChange={handleInput} className="w-full border border-blue-300 bg-blue-50 rounded p-2 font-bold text-blue-800 outline-none">
+                        <option value="">-- เลือก --</option>
+                        {SAIS_STATUSES.map(o => (
+                          <option key={o} value={o}>{o}</option>
+                        ))}
+                      </select>
+                    </div>
+                    
+                    <div className="space-y-1">
+                      <label className="font-bold text-gray-500 uppercase">Condition</label>
+                      <select name="condition" value={formData.condition} onChange={handleInput} className="w-full border rounded p-2 outline-none">
+                        <option value="">-- เลือก --</option>
+                        {CONDITIONS.map(o => (
+                          <option key={o} value={o}>{o}</option>
+                        ))}
+                      </select>
+                    </div>
+                    
+                    <div className="space-y-1">
+                      <label className="font-bold text-gray-500 uppercase">Gen Date</label>
+                      <input 
+                        type="date" 
+                        name="generatedDate" 
+                        value={formData.generatedDate} 
+                        onChange={handleInput} 
+                        className="w-full border rounded p-2 outline-none" 
+                      />
+                    </div>
+                    
+                    <div className="grid grid-cols-3 gap-1 col-span-2 lg:col-span-1">
+                      <div>
+                        <label className="text-[9px] font-bold text-gray-500">Gen Sys</label>
+                        <select name="generatedInSystem" value={formData.generatedInSystem} onChange={handleInput} className="w-full border rounded p-1.5 outline-none">
+                          <option value="">-</option>
+                          <option value="YES">YES</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="text-[9px] font-bold text-gray-500">Pre</label>
+                        <select name="preCheck" value={formData.preCheck} onChange={handleInput} className="w-full border rounded p-1.5 outline-none">
+                          <option value="">-</option>
+                          <option value="OK">OK</option>
+                          <option value="NO">NO</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="text-[9px] font-bold text-gray-500">Buz</label>
+                        <select name="buzzer" value={formData.buzzer} onChange={handleInput} className="w-full border rounded p-1.5 outline-none">
+                          <option value="">-</option>
+                          <option value="YES">YES</option>
+                          <option value="N/A">N/A</option>
+                        </select>
+                      </div>
+                    </div>
+                    
+                    <div className="col-span-2 lg:col-span-4 bg-gray-50 p-2 rounded border">
+                      <label className="font-bold text-gray-800 flex gap-1 mb-2">
+                        <MessageSquare className="w-3 h-3" /> ประวัติคอมเมนต์
+                      </label>
+                      <div className="space-y-1 mb-2 max-h-24 overflow-y-auto">
+                        {(() => { 
+                          const h = parseRemarkHistory(formData.remark); 
+                          if (!h.length || !h[0].text) return <div className="text-gray-400 py-1 text-center">ไม่มีคอมเมนต์</div>; 
+                          return h.map((x, i) => (
+                            <div key={i} className="bg-white p-1.5 rounded border mb-1">
+                              <div className="flex justify-between mb-0.5">
+                                <span className="text-[8px] text-gray-400">{x.date}</span>
+                                <span className="text-[8px] font-bold text-gray-600">{x.author}</span>
+                              </div>
+                              <p className="text-[10px]">{x.text}</p>
+                            </div>
+                          ));
+                        })()}
+                      </div>
+                      <input 
+                        type="text" 
+                        name="newRemark" 
+                        value={formData.newRemark || ''} 
+                        onChange={handleInput} 
+                        className="w-full border rounded p-2 outline-none focus:border-[#E20015]" 
+                        placeholder="เพิ่มคอมเมนต์ใหม่..." 
+                      />
+                    </div>
+                  </div>
+                </div>
+                
+                {/* Modal Footer */}
+                <div className="bg-gray-50 p-3 border-t flex justify-between shrink-0">
+                  {editId ? (
+                    <button onClick={() => handleDelete(editId)} disabled={isSubmitting} className="px-3 py-1.5 rounded font-bold text-red-600 bg-white border flex gap-1 disabled:opacity-50">
+                      <Trash2 className="w-3.5 h-3.5" /> ลบ
+                    </button>
+                  ) : (
+                    <div></div>
+                  )}
+                  <div className="flex gap-2">
+                    <button onClick={closeModal} className="px-3 py-1.5 rounded font-bold bg-white border">ยกเลิก</button>
+                    <button onClick={handleSubmit} disabled={isSubmitting} className="px-4 py-1.5 rounded font-bold bg-[#E20015] text-white flex gap-1 disabled:bg-red-300">
+                      {isSubmitting ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />} บันทึก
+                    </button>
+                  </div>
+                </div>
+                
+              </div>
+            </div>
+          )}
+
+          {/* =============================== */}
+          {/* View Record Modal */}
+          {/* =============================== */}
+          {viewRecord && (
+            <div className="fixed inset-0 bg-black/60 z-50 flex justify-center items-end sm:items-center sm:p-4">
+              <div className="bg-white w-full sm:rounded-xl sm:max-w-2xl max-h-[90vh] flex flex-col slide-up">
+                
+                {/* Modal Header */}
+                <div className="bg-gray-50 p-3 border-b flex justify-between items-center rounded-t-xl">
+                  <div className="flex items-center gap-1.5 font-black text-sm">
+                    <Eye className="w-4 h-4 text-blue-600" /> รายละเอียด
+                  </div>
+                  <button onClick={closeViewModal}>
+                    <X className="w-4 h-4 text-gray-500" />
+                  </button>
+                </div>
+                
+                {/* Modal Body */}
+                <div className="p-4 overflow-y-auto custom-scrollbar text-xs">
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                    <div>
+                      <span className="text-[9px] text-gray-400 font-bold block">Insp. Date</span>
+                      <span className="font-bold">{formatDateToDDMMYY(viewRecord.inspectionDate)}</span>
+                    </div>
+                    <div>
+                      <span className="text-[9px] text-gray-400 font-bold block">Eq. No.</span>
+                      <span className="text-base font-black text-[#E20015]">{viewRecord.equipmentNo}</span>
+                    </div>
+                    <div>
+                      <span className="text-[9px] text-gray-400 font-bold block">Inspector</span>
+                      <span className="font-bold">{viewRecord.inspectorName}</span>
+                    </div>
+                    <div>
+                      <span className="text-[9px] text-gray-400 font-bold block">Product</span>
+                      <span className="bg-gray-100 px-2 py-0.5 rounded font-bold">{viewRecord.productLine}</span>
+                    </div>
+                    <div>
+                      <span className="text-[9px] text-gray-400 font-bold block">Type</span>
+                      <span className="bg-gray-100 px-2 py-0.5 rounded font-bold">{viewRecord.type}</span>
+                    </div>
+                    <div>
+                      <span className="text-[9px] text-gray-400 font-bold block">Unit</span>
+                      <span className="font-bold">{viewRecord.unit}</span>
+                    </div>
+                    <div className="col-span-2 md:col-span-3">
+                      <span className="text-[9px] text-gray-400 font-bold block">Job Site</span>
+                      <span className="bg-gray-50 p-2 rounded block font-bold border">{viewRecord.jobSite}</span>
+                    </div>
+                  </div>
+                  
+                  <div className="border-t border-dashed my-3"></div>
+                  
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-3">
+                    <div>
+                      <span className="text-[9px] text-gray-400 font-bold block mb-1">Status</span>
+                      <span className={`px-2 py-0.5 rounded text-[10px] font-bold border ${viewRecord.saisStatus === 'Passed with Completed' ? 'bg-emerald-100 text-emerald-700 border-emerald-200' : viewRecord.saisStatus === 'Failed' ? 'bg-red-100 text-red-700 border-red-200' : viewRecord.saisStatus === 'Passed with OIL' ? 'bg-amber-100 text-amber-700 border-amber-200' : 'bg-blue-50 text-blue-700'}`}>
+                        {viewRecord.saisStatus || 'PENDING'}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-[9px] text-gray-400 font-bold block">Condition</span>
+                      <span className="font-bold">{viewRecord.condition || '-'}</span>
+                    </div>
+                    <div>
+                      <span className="text-[9px] text-gray-400 font-bold block">Gen. Date</span>
+                      <span className="font-bold">{formatDateToDDMMYY(viewRecord.generatedDate)}</span>
+                    </div>
+                    <div className="col-span-2 md:col-span-3">
+                      <span className="text-[9px] text-gray-400 font-bold block">Sys/Pre/Buz</span>
+                      <span className="font-bold">{viewRecord.generatedInSystem || '-'} / {viewRecord.preCheck || '-'} / {viewRecord.buzzer || '-'}</span>
+                    </div>
+                  </div>
+                  
+                  <div>
+                    <span className="text-[9px] text-gray-400 font-bold block mb-1">
+                      <MessageSquare className="w-3 h-3 inline" /> ประวัติคอมเมนต์
+                    </span>
+                    <div className="bg-gray-50 p-2 rounded border max-h-32 overflow-y-auto">
+                      {(() => { 
+                        const h = parseRemarkHistory(viewRecord.remark); 
+                        if (!h.length || !h[0].text) return <div className="text-gray-400 text-center">ไม่มีข้อมูล</div>; 
+                        return h.map((x, i) => (
+                          <div key={i} className="bg-white p-1.5 rounded border mb-1">
+                            <div className="flex justify-between mb-0.5">
+                              <span className="text-[8px] text-gray-400">{x.date}</span>
+                              <span className="text-[8px] font-bold text-gray-600">{x.author}</span>
+                            </div>
+                            <p className="text-[10px]">{x.text}</p>
+                          </div>
+                        ));
+                      })()}
+                    </div>
+                  </div>
+                </div>
+                
+                {/* Modal Footer */}
+                <div className="bg-gray-50 p-3 border-t flex justify-end gap-2 shrink-0">
+                  <button onClick={closeViewModal} className="px-4 py-1.5 bg-white border rounded font-bold">ปิด</button>
+                  <button onClick={() => { closeViewModal(); openEditModal(viewRecord); }} className="px-4 py-1.5 bg-blue-600 text-white rounded font-bold flex items-center gap-1">
+                    <Edit className="w-3.5 h-3.5" /> แก้ไข
+                  </button>
+                </div>
+                
+              </div>
+            </div>
+          )}
+
+        </div>
+      );
+    }
+    createRoot(document.getElementById('root')).render(<App />);
+  </script>
+</body>
+</html>
