@@ -1,0 +1,1674 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Dashboard and Pending System V2.1</title>
+  
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- React & Babel -->
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <!-- Export Libraries -->
+  <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+  
+  <style>
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: #f1f5f9; border-radius: 10px; }
+    ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+    ::-webkit-scrollbar-thumb:hover { background: #E20015; }
+    .pb-safe { padding-bottom: calc(env(safe-area-inset-bottom) + 1rem); }
+    .fade-in { animation: fadeIn 0.4s ease-in-out; }
+    .slide-up { animation: slideUp 0.3s ease-out forwards; }
+    .toast-enter { animation: toastEnter 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards; }
+    
+    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+    @keyframes slideUp { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+    @keyframes toastEnter { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+    
+    @keyframes shake {
+      0%, 100% { transform: translateX(0); }
+      25% { transform: translateX(-5px); }
+      50% { transform: translateX(5px); }
+      75% { transform: translateX(-5px); }
+    }
+    .animate-shake { animation: shake 0.3s ease-in-out; }
+
+    .sticky-header th { position: sticky; top: 0; z-index: 10; background-color: #f8fafc; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
+    
+    .resize-container::-webkit-scrollbar { display: none; }
+    .resize-container { -ms-overflow-style: none; scrollbar-width: none; }
+    .resizing { user-select: none; cursor: col-resize; }
+    
+    /* Clickable Cards */
+    .clickable-card { transition: all 0.2s ease; cursor: pointer; border: 1px solid transparent; }
+    .clickable-card:hover { transform: translateY(-3px); box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1); border-color: #3b82f6; }
+    .clickable-card-red:hover { border-color: #ef4444; }
+    
+    th select { pointer-events: auto; }
+    
+    /* Recharts Tooltip Customization */
+    .recharts-default-tooltip { border-radius: 8px !important; border: none !important; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1) !important; font-size: 12px; }
+  </style>
+</head>
+<body class="bg-[#F4F6F8] text-gray-800 antialiased overflow-x-hidden overscroll-y-contain font-sans">
+  <div id="root"></div>
+  <script type="text/babel" data-type="module">
+    import React, { useState, useMemo, useEffect, useCallback, useRef } from 'https://esm.sh/react@18.2.0';
+    import { createRoot } from 'https://esm.sh/react-dom@18.2.0/client';
+    
+    // 🔥 แก้ปัญหาจอขาว (White Screen Fix): ใช้ ?bundle&deps=react@18.2.0 เพื่อให้ ESM.sh รวมโค้ดให้สมบูรณ์และบังคับใช้ React เวอร์ชันเดียวกัน
+    import { Save, Plus, Trash2, FileSpreadsheet, Building2, ChevronRight, ChevronLeft, AlertCircle, X, Edit, ClipboardList, Clock, CheckCircle2, AlertTriangle, RefreshCw, Cloud, CloudOff, BarChart2, Filter, RotateCcw, Activity, ShieldAlert, Target, Award, Package, Eye, MessageSquare, Search, History, Settings, TrendingUp, TrendingDown, Minus, PieChart as PieChartIcon, Users, Columns, HelpCircle, Info, LayoutDashboard, FileText, BookOpen, Check, Download, Calendar, MousePointerClick, Zap } from 'https://esm.sh/lucide-react@0.300.0?bundle&deps=react@18.2.0,react-dom@18.2.0';
+    import { PieChart, Pie, Cell, Tooltip as RechartsTooltip, BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Legend } from 'https://esm.sh/recharts@2.12.7?bundle&deps=react@18.2.0,react-dom@18.2.0';
+
+    const GAS_WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbw6qVBH1vCdNVOXMwirdfR9AVQoBmsmF3hKBytnl-wrkk1oaRWBEzPwqo1QmOV9Owua/exec';
+    
+    const PRODUCT_LINES = ["3300", "5500", "7000", "ES1", "ES2", "ES3", "ES5.0", "ES5", "ESC", "MW", "S-Villa", "Flex-7"];
+    const TYPES = ["NI", "MOD-R", "MOD-T", "NI CNX", "NI HKT"];
+    const SAIS_STATUSES = ["Passed with Completed", "Passed with OIL", "Failed", "ยกเลิก"];
+    const CONDITIONS = ["Final", "BUILDER LIFT", "TEMPORARY POWER SUPPLY"];
+    const MONTHS = [{ value: 'all', label: 'ทุกเดือน' }, { value: '01', label: 'มกราคม' }, { value: '02', label: 'กุมภาพันธ์' }, { value: '03', label: 'มีนาคม' }, { value: '04', label: 'เมษายน' }, { value: '05', label: 'พฤษภาคม' }, { value: '06', label: 'มิถุนายน' }, { value: '07', label: 'กรกฎาคม' }, { value: '08', label: 'สิงหาคม' }, { value: '09', label: 'กันยายน' }, { value: '10', label: 'ตุลาคม' }, { value: '11', label: 'พฤศจิกายน' }, { value: '12', label: 'ธันวาคม' }];
+    const DEFAULT_INSPECTORS = ["Thongchai Chalothornnarumit", "Prayod Yoprakhon", "Choosak Choomuang", "Pradit Mingson", "Teeratat Piyasakaksorn", "Matee Khanti", "Narong Robrum", "Chakrin Dangwichai"];
+    const STANDARD_UNITS = ["L1", "L2", "PL1", "PL2", "SL1"];
+    
+    const DEFAULT_WIDTHS = {
+      no: 50, inspDate: 100, eqNo: 110, genDate: 100, sys: 100, insp: 130,
+      prod: 90, type: 90, site: 160, unit: 80, cond: 110, pre: 80, buz: 80, remark: 180, status: 120
+    };
+
+    const COLUMNS_DEF = [
+      { id: 'no', label: 'No.' }, { id: 'inspDate', label: 'Inspection Date' }, { id: 'eqNo', label: 'Equipment No.' },
+      { id: 'genDate', label: 'Generated Date' }, { id: 'sys', label: 'Generated In System' }, { id: 'insp', label: 'Inspector Name' },
+      { id: 'prod', label: 'Product Line' }, { id: 'type', label: 'Type' }, { id: 'site', label: 'Job Site' },
+      { id: 'unit', label: 'Unit' }, { id: 'cond', label: 'Condition' }, { id: 'pre', label: 'Pre Check' },
+      { id: 'buz', label: 'Buzzer' }, { id: 'remark', label: 'Remark' }, { id: 'status', label: 'SAIS Status' }
+    ];
+
+    const getInspectorSortIndex = (name) => {
+        if(!name) return 99;
+        const n = name.toLowerCase();
+        if(n.includes("thongchai")) return 1;
+        if(n.includes("prayod")) return 2;
+        if(n.includes("choosak")) return 3;
+        if(n.includes("pradit")) return 4;
+        if(n.includes("teeratat")) return 5;
+        if(n.includes("narong")) return 6;
+        if(n.includes("matee")) return 7;
+        if(n.includes("chakrin")) return 8;
+        return 99;
+    };
+
+    const formatDateToDDMMYY = (d) => { if (!d) return '-'; const date = new Date(d); return isNaN(date.getTime()) ? '-' : `${String(date.getDate()).padStart(2, '0')}/${String(date.getMonth() + 1).padStart(2, '0')}/${String(date.getFullYear()).slice(-2)}`; };
+    const formatDateForInput = (d) => { if (!d) return ''; const date = new Date(d); return isNaN(date.getTime()) ? '' : `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`; };
+    const getMonthOnly = (d) => { if (!d) return ''; const date = new Date(d); return isNaN(date.getTime()) ? '' : String(date.getMonth() + 1).padStart(2, '0'); };
+    const getYearOnly = (d) => { if (!d) return ''; const date = new Date(d); return isNaN(date.getTime()) ? '' : String(date.getFullYear()); };
+    const formatSyncTime = (d) => d ? `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}` : '';
+    const generateUniqueId = () => crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).substring(2);
+    const parseRemarkHistory = (str) => { try { const p = JSON.parse(str); return Array.isArray(p) ? p : [{ text: str, date: '-', author: 'System' }]; } catch(e) { return str ? [{ text: str, date: '-', author: 'System' }] : []; } };
+
+    // 🔥 Error Boundary ป้องกันจอขาว
+    class ErrorBoundary extends React.Component {
+      constructor(props) { super(props); this.state = { hasError: false, error: null }; }
+      static getDerivedStateFromError(error) { return { hasError: true, error }; }
+      componentDidCatch(error, errorInfo) { console.error("Crash details:", error, errorInfo); }
+      render() {
+        if (this.state.hasError) {
+          return (
+            <div className="min-h-screen flex items-center justify-center bg-red-50 p-4">
+              <div className="bg-white p-6 rounded-xl shadow-lg border border-red-200 max-w-lg w-full">
+                <h2 className="text-red-600 font-black text-xl mb-2 flex items-center gap-2">
+                  <AlertCircle className="w-6 h-6" /> ระบบเกิดข้อผิดพลาด (Crash)
+                </h2>
+                <p className="text-gray-700 text-sm mb-4">โปรดรีเฟรชหน้าเว็บ หากปัญหายังคงอยู่ กรุณาจับภาพหน้าจอนี้ส่งให้ผู้ดูแลระบบ</p>
+                <div className="bg-gray-100 p-3 rounded text-[10px] text-red-500 font-mono overflow-auto max-h-40 mb-4 border">
+                  {this.state.error?.toString()}
+                </div>
+                <button onClick={() => window.location.reload()} className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded font-bold w-full transition-colors">รีเฟรชหน้าเว็บ</button>
+              </div>
+            </div>
+          );
+        }
+        return this.props.children;
+      }
+    }
+
+    function App() {
+      const currentMonthStr = String(new Date().getMonth() + 1).padStart(2, '0');
+      const currentYearStr = String(new Date().getFullYear());
+      
+      const [records, setRecords] = useState([]);
+      const [activeTab, setActiveTab] = useState('dashboard');
+      
+      const [filterMonth, setFilterMonth] = useState(currentMonthStr);
+      // 🔥 Performance Fix: Search Debouncing
+      const [searchInput, setSearchInput] = useState(''); 
+      const [searchTerm, setSearchTerm] = useState('');
+      
+      const [tableFilters, setTableFilters] = useState({ inspDate: '', eqNo: '', genDate: '', sys: '', insp: '', prod: '', type: '', site: '', unit: '', cond: '', pre: '', buz: '', status: '' });
+
+      const [dashYear, setDashYear] = useState(currentYearStr);
+      const [dashPeriod, setDashPeriod] = useState(currentMonthStr); // Default to current month for better MoM view
+
+      const [isModalOpen, setIsModalOpen] = useState(false);
+      const [editId, setEditId] = useState(null);
+      const [viewRecord, setViewRecord] = useState(null);
+      const [syncStatus, setSyncStatus] = useState('idle'); 
+      const [isSubmitting, setIsSubmitting] = useState(false);
+      const [lastSyncedAt, setLastSyncedAt] = useState(null); 
+      const [isNavVisible, setIsNavVisible] = useState(true);
+      const [lastScrollY, setLastScrollY] = useState(0);
+      const [currentPage, setCurrentPage] = useState(1);
+      const ITEMS_PER_PAGE = 30; 
+      const [toast, setToast] = useState(null);
+      
+      const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+      const [inspectorsData, setInspectorsData] = useState(() => DEFAULT_INSPECTORS.map(name => ({ name, certs: [...PRODUCT_LINES] })));
+
+      const [isColMenuOpen, setIsColMenuOpen] = useState(false);
+      const [hiddenCols, setHiddenCols] = useState(() => {
+         try { const saved = localStorage.getItem('sais_hidden_cols_v2'); return saved ? new Set(JSON.parse(saved)) : new Set(); } catch(e) { return new Set(); }
+      });
+      useEffect(() => { localStorage.setItem('sais_hidden_cols_v2', JSON.stringify([...hiddenCols])); }, [hiddenCols]);
+
+      const [colWidths, setColWidths] = useState(() => {
+         try { const saved = localStorage.getItem('sais_col_widths_v2'); return saved ? JSON.parse(saved) : DEFAULT_WIDTHS; } catch(e) { return DEFAULT_WIDTHS; }
+      });
+      useEffect(() => { localStorage.setItem('sais_col_widths_v2', JSON.stringify(colWidths)); }, [colWidths]);
+
+      const [resizing, setResizing] = useState(null);
+      const dashboardRef = useRef(null); 
+
+      const startResize = (e, colId) => {
+         e.preventDefault(); e.stopPropagation(); 
+         setResizing({ id: colId, startX: e.clientX, startWidth: colWidths[colId] || DEFAULT_WIDTHS[colId] });
+      };
+
+      useEffect(() => {
+         const handleMouseMove = (e) => {
+            if (!resizing) return;
+            const diff = e.clientX - resizing.startX;
+            const newWidth = Math.max(50, resizing.startWidth + diff); 
+            setColWidths(prev => ({ ...prev, [resizing.id]: newWidth }));
+         };
+         const handleMouseUp = () => { setResizing(null); };
+         if (resizing) { window.addEventListener('mousemove', handleMouseMove); window.addEventListener('mouseup', handleMouseUp); document.body.classList.add('resizing');
+         } else { document.body.classList.remove('resizing'); }
+         return () => { window.removeEventListener('mousemove', handleMouseMove); window.removeEventListener('mouseup', handleMouseUp); document.body.classList.remove('resizing'); };
+      }, [resizing]);
+
+      const [isHelpOpen, setIsHelpOpen] = useState(false);
+      const showToast = (message, type = 'success') => { setToast({ message, type }); setTimeout(() => setToast(null), 3000); };
+      const closeViewModal = () => setViewRecord(null);
+
+      const initialFormState = { equipmentNo: '', inspectionDate: '', generatedDate: '', generatedInSystem: '', inspectorName: '', productLine: '', type: '', jobSite: '', unit: '', preCheck: '', buzzer: '', saisStatus: '', condition: '', remark: '', newRemark: '' };
+      const [formData, setFormData] = useState(initialFormState);
+      const [validationError, setValidationError] = useState('');
+      const [missingFields, setMissingFields] = useState([]);
+
+      const fetchRecords = useCallback(async (isSilent = false) => {
+        if (!isSilent) setSyncStatus('syncing');
+        try {
+          const res = await fetch(GAS_WEB_APP_URL); if (!res.ok) throw new Error('Net Error');
+          const data = await res.json();
+          if (data && data.records && Array.isArray(data.records)) {
+             setRecords(data.records.filter(i => i.id && i.id.toString().trim() !== ''));
+             if (data.inspectors && Array.isArray(data.inspectors) && data.inspectors.length > 0) {
+                 const parsedInspectors = data.inspectors.map(i => {
+                     let parsedCerts = []; try { parsedCerts = JSON.parse(i.certs); } catch(e) {}
+                     return { name: i.name, certs: Array.isArray(parsedCerts) ? parsedCerts : [] };
+                 });
+                 setInspectorsData(parsedInspectors);
+             }
+             setSyncStatus('success'); setLastSyncedAt(new Date());
+          } 
+          else if (Array.isArray(data)) { setRecords(data.filter(i => i.id && i.id.toString().trim() !== '')); setSyncStatus('success'); setLastSyncedAt(new Date()); }
+          else { setRecords([]); setSyncStatus('idle'); }
+        } catch (e) { setSyncStatus('error'); if (!isSilent) showToast('เชื่อมต่อฐานข้อมูลล้มเหลว', 'error'); }
+      }, []);
+
+      useEffect(() => { fetchRecords(); }, [fetchRecords]);
+
+      const availableYears = useMemo(() => {
+         const years = new Set([currentYearStr]);
+         records.forEach(r => { const y = getYearOnly(r.inspectionDate); if (y) years.add(y); });
+         return [...years].sort().reverse();
+      }, [records, currentYearStr]);
+
+      useEffect(() => {
+        const handleScroll = () => { setIsNavVisible(window.scrollY < lastScrollY || window.scrollY < 50); setLastScrollY(window.scrollY); };
+        window.addEventListener('scroll', handleScroll, { passive: true }); return () => window.removeEventListener('scroll', handleScroll);
+      }, [lastScrollY]);
+
+      useEffect(() => { setCurrentPage(1); }, [activeTab, filterMonth, searchTerm, tableFilters]);
+
+      const latestInspectionDate = useMemo(() => { const sorted = [...records].sort((a, b) => new Date(b.inspectionDate || 0) - new Date(a.inspectionDate || 0)); return sorted[0]?.inspectionDate || ''; }, [records]);
+
+      // Trigger Search Manual
+      const handleExecuteSearch = () => {
+         setSearchTerm(searchInput);
+      };
+      
+      const handleKeyDownSearch = (e) => {
+         if (e.key === 'Enter') {
+             handleExecuteSearch();
+         }
+      };
+
+      // Data Chunking: กรองเดือนและปีก่อนเพื่อความรวดเร็ว
+      const periodFilteredRecords = useMemo(() => {
+          return records.filter(rec => {
+             if (filterMonth !== 'all' && getMonthOnly(rec.inspectionDate) !== filterMonth) return false;
+             return true;
+          });
+      }, [records, filterMonth]);
+
+      // ดึง Option สำหรับตารางกรอง
+      const uniqueTableOptions = useMemo(() => {
+         const opts = { inspDate: new Set(), eqNo: new Set(), genDate: new Set(), sys: new Set(), insp: new Set(), prod: new Set(), type: new Set(), site: new Set(), unit: new Set(), cond: new Set(), pre: new Set(), buz: new Set(), status: new Set() };
+         periodFilteredRecords.forEach(r => {
+            if(r.inspectionDate) { const d = formatDateToDDMMYY(r.inspectionDate); if(d !== '-') opts.inspDate.add(d); }
+            if(r.equipmentNo != null) opts.eqNo.add(String(r.equipmentNo).trim());
+            if(r.generatedDate) { const d = formatDateToDDMMYY(r.generatedDate); if(d !== '-') opts.genDate.add(d); }
+            if(r.jobSite != null && String(r.jobSite).trim() !== '') opts.site.add(String(r.jobSite).trim());
+            if(r.generatedInSystem != null && String(r.generatedInSystem).trim() !== '') opts.sys.add(String(r.generatedInSystem).trim());
+            if(r.inspectorName != null && String(r.inspectorName).trim() !== '') opts.insp.add(String(r.inspectorName).trim());
+            if(r.productLine != null && String(r.productLine).trim() !== '') opts.prod.add(String(r.productLine).trim());
+            if(r.type != null && String(r.type).trim() !== '') opts.type.add(String(r.type).trim());
+            if(r.unit != null && String(r.unit).trim() !== '') opts.unit.add(String(r.unit).trim());
+            if(r.condition != null && String(r.condition).trim() !== '') opts.cond.add(String(r.condition).trim());
+            if(r.preCheck != null && String(r.preCheck).trim() !== '') opts.pre.add(String(r.preCheck).trim());
+            if(r.buzzer != null && String(r.buzzer).trim() !== '') opts.buz.add(String(r.buzzer).trim());
+            if(r.saisStatus != null && String(r.saisStatus).trim() !== '') opts.status.add(String(r.saisStatus).trim());
+         });
+         return {
+            inspDate: [...opts.inspDate].sort(), eqNo: [...opts.eqNo].sort(), genDate: [...opts.genDate].sort(), site: [...opts.site].sort(),
+            sys: [...opts.sys].sort(), insp: [...opts.insp].sort(), prod: [...opts.prod].sort(), type: [...opts.type].sort(),
+            unit: [...opts.unit].sort(), cond: [...opts.cond].sort(), pre: [...opts.pre].sort(), buz: [...opts.buz].sort(), status: [...opts.status].sort()
+         };
+      }, [periodFilteredRecords]);
+
+      // Deep Filtering
+      const displayedRecords = useMemo(() => {
+        return periodFilteredRecords.filter(rec => {
+          if (searchTerm) { const s = searchTerm.toLowerCase(); if (!String(rec.equipmentNo||'').toLowerCase().includes(s) && !String(rec.jobSite||'').toLowerCase().includes(s)) return false; }
+          
+          if (tableFilters.inspDate && formatDateToDDMMYY(rec.inspectionDate) !== tableFilters.inspDate) return false;
+          if (tableFilters.eqNo && String(rec.equipmentNo||'').trim() !== tableFilters.eqNo) return false;
+          if (tableFilters.genDate && formatDateToDDMMYY(rec.generatedDate) !== tableFilters.genDate) return false;
+          if (tableFilters.site && String(rec.jobSite||'').trim() !== tableFilters.site) return false;
+          if (tableFilters.sys && String(rec.generatedInSystem||'').trim() !== tableFilters.sys) return false;
+          if (tableFilters.insp && String(rec.inspectorName||'').trim() !== tableFilters.insp) return false;
+          if (tableFilters.prod && String(rec.productLine||'').trim() !== tableFilters.prod) return false;
+          if (tableFilters.type && String(rec.type||'').trim() !== tableFilters.type) return false;
+          if (tableFilters.unit && String(rec.unit||'').trim() !== tableFilters.unit) return false;
+          
+          if (tableFilters.cond) {
+              if (tableFilters.cond === 'BLANK_COND') { if (String(rec.condition||'').trim() !== '') return false; } 
+              else if (String(rec.condition||'').trim() !== tableFilters.cond) return false;
+          }
+          if (tableFilters.pre && String(rec.preCheck||'').trim() !== tableFilters.pre) return false;
+          if (tableFilters.buz && String(rec.buzzer||'').trim() !== tableFilters.buz) return false;
+          
+          if (tableFilters.status) {
+              if (tableFilters.status === 'FPY') { if (rec.saisStatus !== 'Passed with Completed' && rec.saisStatus !== 'Passed with OIL') return false; } 
+              else if (String(rec.saisStatus||'').trim() !== tableFilters.status) return false;
+          }
+          return true;
+        }).sort((a, b) => {
+           const dA = new Date(a.inspectionDate || 0).getTime(); const dB = new Date(b.inspectionDate || 0).getTime();
+           if (!isNaN(dA) && !isNaN(dB)) { if (dA !== dB) return dA - dB; } return parseInt(a.id || 0) - parseInt(b.id || 0);
+        });
+      }, [periodFilteredRecords, searchTerm, tableFilters]);
+
+      const totalPages = Math.ceil(displayedRecords.length / ITEMS_PER_PAGE);
+      const paginatedRecords = useMemo(() => displayedRecords.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE), [displayedRecords, currentPage]);
+      const processedPaginatedRecords = useMemo(() => {
+        let currentBgIsGray = false; let lastProcessedDate = null;
+        return paginatedRecords.map((r, i) => {
+          const rDate = formatDateToDDMMYY(r.inspectionDate); let showDate = false;
+          if (rDate !== lastProcessedDate) { showDate = true; if (i > 0) currentBgIsGray = !currentBgIsGray; lastProcessedDate = rDate; }
+          return { ...r, displayDateFormatted: rDate, showDate: showDate, bgClass: currentBgIsGray ? 'bg-gray-50' : 'bg-white' };
+        });
+      }, [paginatedRecords]);
+
+      const handleInput = (e) => { 
+        setFormData(p => ({ ...p, [e.target.name]: e.target.value })); 
+        setValidationError(''); 
+        if (missingFields.includes(e.target.name)) setMissingFields(p => p.filter(f => f !== e.target.name));
+      };
+
+      const handleTableFilter = (e) => { 
+          const { name, value } = e.target; 
+          setTableFilters(prev => ({ ...prev, [name]: value })); 
+      };
+      
+      const hasTableFilters = Object.values(tableFilters).some(v => v !== '') || searchTerm !== '';
+      const clearTableFilters = () => {
+          setTableFilters({ inspDate: '', eqNo: '', genDate: '', site: '', sys: '', insp: '', prod: '', type: '', unit: '', cond: '', pre: '', buz: '', status: '' });
+          setSearchTerm('');
+          setSearchInput('');
+      };
+
+      // Get Active Filter Badges
+      const getActiveFilterBadges = () => {
+          const badges = [];
+          if (filterMonth !== 'all') {
+             const mLabel = MONTHS.find(m=>m.value===filterMonth)?.label || filterMonth;
+             badges.push({ key: 'month', type: 'month', label: `เดือน: ${mLabel}` });
+          }
+          if (searchTerm) badges.push({ key: 'search', type: 'search', label: `ค้นหา: ${searchTerm}` });
+          
+          Object.entries(tableFilters).forEach(([key, val]) => {
+              if (val) {
+                  let displayVal = val;
+                  if (key === 'cond' && val === 'BLANK_COND') displayVal = 'ไม่ระบุ';
+                  if (key === 'status' && val === 'FPY') displayVal = 'Passed (Completed) + Passed (OIL)';
+                  badges.push({ key, type: 'table', label: `${COLUMNS_DEF.find(c=>c.id===key)?.label || key}: ${displayVal}` });
+              }
+          });
+          return badges;
+      };
+      
+      const removeFilter = (filterKey, type) => {
+          if (type === 'month') setFilterMonth('all');
+          else if (type === 'search') { setSearchTerm(''); setSearchInput(''); }
+          else setTableFilters(prev => ({ ...prev, [filterKey]: '' }));
+      };
+      
+      const toggleColumn = (colId) => {
+        const newHidden = new Set(hiddenCols);
+        if (newHidden.has(colId)) newHidden.delete(colId); else newHidden.add(colId);
+        setHiddenCols(newHidden); 
+      };
+      const clearHiddenCols = () => setHiddenCols(new Set());
+      const resetColWidths = () => setColWidths(DEFAULT_WIDTHS);
+
+      const openAddModal = () => { 
+        setFormData({ ...initialFormState, inspectionDate: formatDateForInput(latestInspectionDate) || (filterMonth !== 'all' ? `${dashYear}-${filterMonth}-01` : '') }); 
+        setEditId(null); setValidationError(''); setMissingFields([]); setIsModalOpen(true); 
+      };
+      const closeModal = () => setIsModalOpen(false);
+      const openViewModal = (r) => setViewRecord(r);
+      const openEditModal = (r) => { 
+        setFormData({ ...r, inspectionDate: formatDateForInput(r.inspectionDate), generatedDate: formatDateForInput(r.generatedDate), newRemark: '' }); 
+        setEditId(r.id); setValidationError(''); setMissingFields([]); setIsModalOpen(true); 
+      };
+
+      const syncDb = async (payload, msg) => {
+        try {
+          const res = await fetch(GAS_WEB_APP_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify(payload) });
+          const text = await res.text(); let out;
+          try { out = JSON.parse(text); } catch(e) { throw new Error("Invalid Server Response"); }
+          if(out.status === 'success') { setLastSyncedAt(new Date()); showToast(msg); } else throw new Error(out.message || "Unknown Error");
+        } catch (e) { showToast(`Error: ${e.message}`, 'error'); } finally { setIsSubmitting(false); }
+      };
+
+      const saveSettingsOnline = async () => {
+         setIsSubmitting(true);
+         try {
+            const payload = { action: 'SAVE_SETTINGS', inspectors: inspectorsData };
+            const res = await fetch(GAS_WEB_APP_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify(payload) });
+            const text = await res.text(); let out;
+            try { out = JSON.parse(text); } catch(e) { throw new Error("Invalid Server Response"); }
+            if(out.status === 'success') { showToast('บันทึกตั้งค่าสำเร็จ', 'success'); setIsSettingsOpen(false); } 
+            else { throw new Error(out.message || "Unknown Error"); }
+         } catch(err) { showToast(`Error: ${err.message}`, 'error'); } finally { setIsSubmitting(false); }
+      };
+
+      const handleSubmit = async (e) => {
+        e.preventDefault(); if (isSubmitting) return; 
+        setValidationError(''); setMissingFields([]);
+
+        try {
+            const req = ['equipmentNo', 'inspectionDate', 'inspectorName', 'productLine', 'type', 'jobSite', 'unit'];
+            const missing = req.filter(f => !formData[f] || String(formData[f]).trim() === '');
+            
+            if (missing.length > 0) {
+                setMissingFields(missing); return setValidationError(`กรุณากรอกข้อมูลสำคัญให้ครบถ้วน: ${missing.join(', ')}`);
+            }
+
+            const eqString = String(formData.equipmentNo).trim(); const eqRegex = /^\d+$/;
+            if (!eqRegex.test(eqString)) {
+                setMissingFields(['equipmentNo']); return setValidationError('รูปแบบ Eq No. ไม่ถูกต้อง (ตัวเลขเท่านั้น)');
+            }
+            if (formData.generatedDate && formData.inspectionDate) {
+              const genDate = new Date(formData.generatedDate); const inspDate = new Date(formData.inspectionDate);
+              genDate.setHours(0,0,0,0); inspDate.setHours(0,0,0,0);
+              if (genDate < inspDate) return setValidationError('Gen Date ต้องไม่ก่อน Inspection Date');
+            }
+            
+            setIsSubmitting(true);
+            const og = editId ? records.find(r => String(r.id) === String(editId)) : null;
+            let hist = parseRemarkHistory(og?.remark);
+            if (formData.newRemark && String(formData.newRemark).trim()) { hist.push({ text: String(formData.newRemark).trim(), date: formatDateToDDMMYY(new Date()), author: formData.inspectorName || 'System' }); }
+            
+            const pData = { ...formData, equipmentNo: eqString, displayInspectionDate: formatDateToDDMMYY(formData.inspectionDate), displayGeneratedDate: formatDateToDDMMYY(formData.generatedDate), remark: JSON.stringify(hist) };
+            delete pData.newRemark;
+            let target, msg;
+            
+            if (editId) { 
+                target = { ...pData, id: editId }; 
+                setRecords(p => p.map(r => String(r.id) === String(editId) ? target : r)); 
+                msg = 'อัปเดตสำเร็จ'; 
+            } else { 
+                target = { ...pData, id: generateUniqueId() }; 
+                setRecords(p => [target, ...p]); 
+                msg = 'เพิ่มสำเร็จ'; 
+            }
+            closeModal(); await syncDb({ action: 'SAVE', record: target }, msg);
+        } catch (err) { setValidationError(`ระบบขัดข้อง: ${err.message}`); setIsSubmitting(false); }
+      };
+
+      const handleDelete = (id) => { if(window.confirm('ยืนยันลบถาวร?')) { setIsSubmitting(true); setRecords(p => p.filter(r => String(r.id) !== String(id))); closeModal(); syncDb({ action: 'DELETE', id }, 'ลบสำเร็จ'); } };
+
+      const updateInspectorName = (idx, newName) => { const newData = [...inspectorsData]; newData[idx].name = newName; setInspectorsData(newData); };
+      const toggleCert = (idx, pl) => { const newData = [...inspectorsData]; if (newData[idx].certs.includes(pl)) newData[idx].certs = newData[idx].certs.filter(c => c !== pl); else newData[idx].certs.push(pl); setInspectorsData(newData); };
+      const deleteInspector = (idx) => { if(window.confirm('ลบรายชื่อนี้?')) setInspectorsData(inspectorsData.filter((_, i) => i !== idx)); };
+      const addInspector = () => setInspectorsData([...inspectorsData, { name: 'New Inspector', certs: [] }]);
+      const selectAllCerts = (idx) => { const newData = [...inspectorsData]; newData[idx].certs = [...PRODUCT_LINES]; setInspectorsData(newData); };
+      const clearAllCerts = (idx) => { const newData = [...inspectorsData]; newData[idx].certs = []; setInspectorsData(newData); };
+
+      // ================= DRILL-DOWN LOGIC ================= //
+      const handleDrillDown = (filters) => {
+         clearTableFilters();
+         
+         setTableFilters(prev => ({ ...prev, ...filters }));
+         
+         if (dashPeriod !== 'all' && !dashPeriod.startsWith('Q')) {
+             setFilterMonth(dashPeriod); 
+         } else {
+             setFilterMonth('all'); 
+         }
+         
+         setActiveTab('records');
+         window.scrollTo(0,0);
+      };
+
+      // ================= DASHBOARD USEMEMO (Analytics + Trend MoM) ================= //
+      const dashboardData = useMemo(() => {
+         const calculateStats = (targetYear, targetPeriod) => {
+             const activeRecs = records.filter(r => {
+                 if (r.saisStatus === 'ยกเลิก') return false; 
+                 if (targetYear !== 'all' && getYearOnly(r.inspectionDate) !== targetYear) return false;
+                 
+                 if (targetPeriod !== 'all') {
+                    const month = getMonthOnly(r.inspectionDate);
+                    if (targetPeriod === 'Q1' && !['01','02','03'].includes(month)) return false;
+                    if (targetPeriod === 'Q2' && !['04','05','06'].includes(month)) return false;
+                    if (targetPeriod === 'Q3' && !['07','08','09'].includes(month)) return false;
+                    if (targetPeriod === 'Q4' && !['10','11','12'].includes(month)) return false;
+                    if (!targetPeriod.startsWith('Q') && month !== targetPeriod) return false;
+                 }
+                 return true; 
+             });
+
+             let st = { total: 0, comp: 0, oil: 0, failed: 0, pending: 0 };
+             let productStats = {};
+             let inspectorStats = {};
+             let buzzerStats = { YES: 0, NO: 0 }; 
+             let preCheckStats = { OK: 0, NO: 0 };
+             let typeStats = {};
+             let nonFinalTotal = 0;
+             let condStats = {};
+
+             activeRecs.forEach(r => {
+                st.total++;
+                const status = r.saisStatus || '';
+                
+                if (status === 'Passed with Completed') st.comp++;
+                else if (status === 'Passed with OIL') st.oil++;
+                else if (status === 'Failed') st.failed++;
+                else st.pending++; 
+
+                if (status === '' || status === 'PENDING') return; 
+
+                if (r.preCheck === 'OK') preCheckStats.OK++;
+                if (r.preCheck === 'NO') preCheckStats.NO++;
+                if (r.buzzer === 'YES') buzzerStats.YES++;
+                if (r.buzzer === 'NO') buzzerStats.NO++;
+
+                if(r.productLine) {
+                   if(!productStats[r.productLine]) productStats[r.productLine] = { total: 0, comp: 0, oil: 0, failed: 0 };
+                   productStats[r.productLine].total++;
+                   if(status === 'Passed with Completed') productStats[r.productLine].comp++;
+                   if(status === 'Passed with OIL') productStats[r.productLine].oil++;
+                   if(status === 'Failed') productStats[r.productLine].failed++;
+                }
+
+                if (r.inspectorName) {
+                   if(!inspectorStats[r.inspectorName]) inspectorStats[r.inspectorName] = { total: 0, fpy: 0 };
+                   inspectorStats[r.inspectorName].total++;
+                   if(status === 'Passed with Completed' || status === 'Passed with OIL') inspectorStats[r.inspectorName].fpy++;
+                }
+
+                if (r.type) {
+                   if(!typeStats[r.type]) typeStats[r.type] = { total: 0, fail: 0 };
+                   typeStats[r.type].total++;
+                   if(status === 'Failed') typeStats[r.type].fail++;
+                }
+
+                const conditionVal = String(r.condition || '').trim();
+                if (conditionVal !== 'Final') {
+                   nonFinalTotal++;
+                   const condKey = conditionVal === '' ? 'ไม่มีระบุ (Blank)' : conditionVal;
+                   if(!condStats[condKey]) condStats[condKey] = { total: 0 };
+                   condStats[condKey].total++;
+                }
+             });
+
+             const validTotal = st.total - st.pending;
+             const fpyRate = validTotal > 0 ? Math.round(((st.comp + st.oil) / validTotal) * 100) : 0;
+             const failRate = validTotal > 0 ? Math.round((st.failed / validTotal) * 100) : 0;
+             
+             return { st, productStats, inspectorStats, buzzerStats, preCheckStats, typeStats, condStats, nonFinalTotal, fpyRate, failRate, activeRecs };
+         };
+
+         const current = calculateStats(dashYear, dashPeriod);
+         
+         let prevYear = dashYear;
+         let prevPeriod = dashPeriod;
+         
+         if (dashPeriod !== 'all' && !dashPeriod.startsWith('Q')) {
+             let m = parseInt(dashPeriod);
+             if (m === 1) { 
+                 prevPeriod = '12'; 
+                 prevYear = dashYear !== 'all' ? (parseInt(dashYear) - 1).toString() : 'all'; 
+             } else { 
+                 prevPeriod = String(m - 1).padStart(2, '0'); 
+             }
+         } else if (dashYear !== 'all') {
+             prevYear = (parseInt(dashYear) - 1).toString();
+         }
+         
+         const previous = calculateStats(prevYear, prevPeriod);
+         const fpyTrend = current.fpyRate - previous.fpyRate;
+         
+         const barData = Object.entries(current.productStats).map(([name, data]) => ({ name, ...data })).sort((a,b) => b.total - a.total).slice(0, 8);
+         
+         const leaderboardData = Object.entries(current.inspectorStats)
+            .map(([name, data]) => ({ name, ...data }))
+            .sort((a,b) => getInspectorSortIndex(a.name) - getInspectorSortIndex(b.name));
+         
+         const typeData = Object.entries(current.typeStats).map(([name, data]) => ({
+             name, total: data.total, fail: data.fail, 
+             failRate: data.total > 0 ? Math.round((data.fail/data.total)*100) : 0
+         })).sort((a,b) => b.total - a.total);
+
+         const condData = Object.entries(current.condStats).map(([name, data]) => ({
+             name, total: data.total
+         })).sort((a,b) => b.total - a.total);
+
+         return { 
+            stats: current.st, barData, leaderboardData, buzzerStats: current.buzzerStats, 
+            preCheckStats: current.preCheckStats, fpyRate: current.fpyRate, failRate: current.failRate, 
+            typeData, condData, nonFinalTotal: current.nonFinalTotal, activeCount: current.activeRecs.length,
+            fpyTrend 
+         };
+      }, [records, dashYear, dashPeriod]);
+
+      // PDF / Excel
+      const exportToExcel = () => {
+         const wsData = displayedRecords.map(r => ({
+             "No": r.equipmentNo,
+             "Insp Date": formatDateToDDMMYY(r.inspectionDate),
+             "System Date": formatDateToDDMMYY(r.generatedDate),
+             "Inspector": r.inspectorName,
+             "Product Line": r.productLine,
+             "Type": r.type,
+             "Job Site": r.jobSite,
+             "Unit": r.unit,
+             "Status": r.saisStatus,
+             "Condition": r.condition,
+             "Pre-Check": r.preCheck,
+             "Buzzer": r.buzzer,
+             "Remark": r.remark ? parseRemarkHistory(r.remark).pop()?.text || '' : ''
+         }));
+         const ws = XLSX.utils.json_to_sheet(wsData);
+         const wb = XLSX.utils.book_new();
+         XLSX.utils.book_append_sheet(wb, ws, "Records");
+         XLSX.writeFile(wb, `SAIS_Report_${dashYear}_${dashPeriod}.xlsx`);
+      };
+
+      const exportToPDF = () => {
+         const element = dashboardRef.current;
+         const opt = {
+           margin: 0.2,
+           filename: `Dashboard_SAIS_${dashYear}_${dashPeriod}.pdf`,
+           image: { type: 'jpeg', quality: 0.98 },
+           html2canvas: { scale: 2, useCORS: true },
+           jsPDF: { unit: 'in', format: 'a4', orientation: 'landscape' }
+         };
+         html2pdf().set(opt).from(element).save();
+      };
+
+      const renderDashboard = () => {
+        const { stats, barData, leaderboardData, buzzerStats, preCheckStats, fpyRate, failRate, typeData, condData, nonFinalTotal, fpyTrend } = dashboardData;
+        
+        const statusRawData = [ 
+           { name: 'Completed', filterVal: 'Passed with Completed', value: stats.comp, fill: '#10b981' }, 
+           { name: 'Passed (OIL)', filterVal: 'Passed with OIL', value: stats.oil, fill: '#f59e0b' },
+           { name: 'Failed', filterVal: 'Failed', value: stats.failed, fill: '#ef4444' }
+        ].filter(d => d.value > 0);
+        
+        if (stats.pending > 0) statusRawData.push({ name: 'Pending', filterVal: '', value: stats.pending, fill: '#9ca3af' });
+
+        return (
+          <div className="space-y-4 fade-in pb-10" ref={dashboardRef}>
+            {/* Toolbar */}
+            <div className="bg-white border rounded-xl p-3 flex flex-col sm:flex-row justify-between items-center gap-3 shadow-sm" data-html2canvas-ignore>
+               <div className="flex items-center gap-3 w-full sm:w-auto">
+                 <div className="flex items-center gap-1.5 bg-gray-100 p-1.5 rounded-lg border">
+                    <Calendar className="w-4 h-4 text-gray-500" />
+                    <select value={dashYear} onChange={e=>setDashYear(e.target.value)} className="bg-transparent text-xs font-bold outline-none cursor-pointer text-gray-700">
+                       <option value="all">ทุกปี</option>
+                       {availableYears.map(y => <option key={y} value={y}>{y}</option>)}
+                    </select>
+                 </div>
+                 <div className="flex items-center gap-1.5 bg-gray-100 p-1.5 rounded-lg border">
+                    <Filter className="w-4 h-4 text-gray-500" />
+                    <select value={dashPeriod} onChange={e=>setDashPeriod(e.target.value)} className="bg-transparent text-xs font-bold outline-none cursor-pointer text-gray-700">
+                       <option value="all">ทั้งปี (All)</option>
+                       <option value="Q1">ไตรมาส 1 (ม.ค. - มี.ค.)</option>
+                       <option value="Q2">ไตรมาส 2 (เม.ย. - มิ.ย.)</option>
+                       <option value="Q3">ไตรมาส 3 (ก.ค. - ก.ย.)</option>
+                       <option value="Q4">ไตรมาส 4 (ต.ค. - ธ.ค.)</option>
+                       {MONTHS.slice(1).map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
+                    </select>
+                 </div>
+               </div>
+               
+               <div className="flex gap-2 w-full sm:w-auto">
+                 <button onClick={exportToExcel} className="flex-1 sm:flex-none flex justify-center items-center gap-1 bg-emerald-50 text-emerald-700 border border-emerald-200 px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-emerald-100 transition"><FileSpreadsheet className="w-4 h-4"/> Excel</button>
+                 <button onClick={exportToPDF} className="flex-1 sm:flex-none flex justify-center items-center gap-1 bg-red-50 text-red-700 border border-red-200 px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-red-100 transition"><Download className="w-4 h-4"/> PDF</button>
+               </div>
+            </div>
+
+            {stats.total === 0 ? <div className="bg-white rounded-xl shadow-sm p-10 text-center border"><Activity className="w-12 h-12 text-gray-200 mx-auto mb-2 animate-pulse"/><h3 className="font-bold text-gray-500">ไม่พบข้อมูลในปี/รอบเดือน ที่เลือก</h3></div> : (
+              <>
+                {/* 3 Main Highlight Cards */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div onClick={() => handleDrillDown({})} className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm flex flex-col justify-center relative overflow-hidden group clickable-card" title="คลิกเพื่อดูงานทั้งหมด">
+                     <div className="absolute -right-4 -bottom-4 opacity-10 group-hover:scale-110 transition-transform"><Package className="w-24 h-24 text-gray-500" /></div>
+                     <div className="flex justify-between items-start mb-1">
+                        <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Total Inspected</span>
+                        <MousePointerClick className="w-4 h-4 text-gray-300 group-hover:text-blue-500 transition-colors" />
+                     </div>
+                     <div className="text-4xl font-black text-gray-800 tracking-tight">{stats.total} <span className="text-sm font-medium text-gray-400">งาน</span></div>
+                     <span className="text-[10px] text-gray-400 mt-2 font-medium">จำนวนงานเข้าตรวจทั้งหมด (รวมรอผล)</span>
+                  </div>
+                  
+                  {/* FPY Card with Trend */}
+                  <div onClick={() => handleDrillDown({ status: 'FPY' })} className="bg-white p-5 rounded-xl border border-blue-200 shadow-sm flex flex-col justify-center relative overflow-hidden group clickable-card" title="คลิกเพื่อดูกลุ่มงานที่ตรวจผ่าน">
+                     <div className="absolute -right-4 -bottom-4 opacity-10 group-hover:scale-110 transition-transform"><Target className="w-24 h-24 text-blue-500" /></div>
+                     <div className="flex justify-between items-start mb-1">
+                        <span className="text-[10px] font-bold text-blue-600 uppercase tracking-wider">First Pass Yield</span>
+                        <MousePointerClick className="w-4 h-4 text-blue-300 group-hover:text-blue-500 transition-colors" />
+                     </div>
+                     <div className="text-4xl font-black text-gray-800 tracking-tight flex items-end gap-2">
+                         {fpyRate}%
+                         {fpyTrend !== 0 && (
+                            <span className={`flex items-center text-xs mb-1.5 px-1.5 py-0.5 rounded font-bold ${fpyTrend > 0 ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'}`}>
+                               {fpyTrend > 0 ? <TrendingUp className="w-3 h-3 mr-0.5" /> : <TrendingDown className="w-3 h-3 mr-0.5" />}
+                               {fpyTrend > 0 ? '+' : ''}{fpyTrend}%
+                            </span>
+                         )}
+                         {fpyTrend === 0 && records.length > 0 && (
+                            <span className="flex items-center text-xs mb-1.5 px-1.5 py-0.5 rounded font-bold bg-gray-100 text-gray-500">
+                               <Minus className="w-3 h-3 mr-0.5" /> 0%
+                            </span>
+                         )}
+                     </div>
+                     <span className="text-[10px] text-gray-500 mt-2 font-medium flex justify-between w-full pr-10">
+                        <span>ผ่านสำเร็จ (Completed + OIL)</span>
+                        {fpyTrend !== 0 && <span className="text-[9px] text-gray-400">เทียบกับรอบก่อน</span>}
+                     </span>
+                  </div>
+
+                  <div onClick={() => handleDrillDown({ status: 'Failed' })} className="bg-white p-5 rounded-xl border border-red-200 shadow-sm flex flex-col justify-center relative overflow-hidden group clickable-card clickable-card-red" title="คลิกเพื่อดูกลุ่มงาน Failed">
+                     <div className="absolute -right-4 -bottom-4 opacity-10 group-hover:scale-110 transition-transform"><ShieldAlert className="w-24 h-24 text-red-500" /></div>
+                     <div className="flex justify-between items-start mb-1">
+                        <span className="text-[10px] font-bold text-red-600 uppercase tracking-wider">Failed Defects</span>
+                        <MousePointerClick className="w-4 h-4 text-red-300 group-hover:text-red-500 transition-colors" />
+                     </div>
+                     <div className="text-4xl font-black text-gray-800 tracking-tight flex items-end gap-2">
+                        {stats.failed} 
+                        <span className="text-sm font-bold text-red-500 mb-1.5 bg-red-50 px-2 py-0.5 rounded">({failRate}%)</span>
+                     </div>
+                     <span className="text-[10px] text-gray-400 mt-2 font-medium">ต้องแก้ไข (คลิกเพื่อดูรายชื่อไซต์งาน)</span>
+                  </div>
+                </div>
+
+                {/* Level 2: Core Charts (Recharts) */}
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                   {/* Donut Chart */}
+                   <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm flex flex-col h-[320px]">
+                      <h3 className="text-sm font-bold text-gray-700 flex items-center justify-between mb-2">
+                          <span className="flex items-center gap-2"><PieChartIcon className="w-4 h-4 text-blue-500"/> สัดส่วนผลการตรวจ</span>
+                      </h3>
+                      <div className="flex-1 w-full relative">
+                         {stats.total === 0 ? <div className="absolute inset-0 flex justify-center items-center text-xs font-bold text-gray-400">ไม่มีข้อมูล</div> : (
+                             <ResponsiveContainer width="100%" height="100%">
+                                <PieChart>
+                                   <Pie 
+                                     data={statusRawData} 
+                                     cx="50%" cy="45%" 
+                                     innerRadius={60} outerRadius={85} 
+                                     paddingAngle={4} dataKey="value"
+                                     onClick={(e) => { 
+                                         const statusVal = e?.payload?.filterVal || e?.filterVal; 
+                                         if(statusVal) handleDrillDown({ status: statusVal }); 
+                                     }}
+                                     className="cursor-pointer outline-none hover:opacity-80 transition-opacity"
+                                   >
+                                      {statusRawData.map((entry, index) => (
+                                         <Cell key={`cell-${index}`} fill={entry.fill} />
+                                      ))}
+                                   </Pie>
+                                   <RechartsTooltip formatter={(value, name) => [`${value} งาน`, name]} />
+                                   <Legend verticalAlign="bottom" height={36} iconType="circle" wrapperStyle={{ fontSize: '11px', fontWeight: 'bold' }} />
+                                </PieChart>
+                             </ResponsiveContainer>
+                         )}
+                         <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none" style={{ marginTop: '-15px' }}>
+                            <span className="text-2xl font-black text-gray-800 leading-none">{stats.total}</span>
+                            <span className="text-[10px] font-bold text-gray-400">TOTAL</span>
+                         </div>
+                      </div>
+                   </div>
+
+                   {/* Bar Chart */}
+                   <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm flex flex-col lg:col-span-2 h-[320px]">
+                      <h3 className="text-sm font-bold text-gray-700 flex items-center justify-between mb-4">
+                        <span className="flex items-center gap-2"><BarChart2 className="w-4 h-4 text-indigo-500"/> ผลงานตามรุ่น Product Line</span>
+                      </h3>
+                      <div className="flex-1 w-full">
+                         {barData.length === 0 ? <div className="h-full flex justify-center items-center text-xs font-bold text-gray-400">ไม่มีข้อมูล</div> : (
+                             <ResponsiveContainer width="100%" height="100%">
+                                <BarChart data={barData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                                   <XAxis dataKey="name" tick={{ fontSize: 10, fontWeight: 'bold', fill: '#64748b' }} axisLine={false} tickLine={false} />
+                                   <YAxis tick={{ fontSize: 10, fill: '#64748b' }} axisLine={false} tickLine={false} />
+                                   <RechartsTooltip cursor={{ fill: '#f8fafc' }} contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }} />
+                                   <Legend verticalAlign="top" align="right" iconType="circle" wrapperStyle={{ fontSize: '11px', fontWeight: 'bold', paddingBottom: '10px' }} />
+                                   
+                                   <Bar dataKey="failed" name="Failed" stackId="a" fill="#ef4444" radius={[0, 0, 4, 4]} onClick={(e) => { const n = e?.payload?.name || e?.name; if(n) handleDrillDown({ prod: n, status: 'Failed' }); }} className="cursor-pointer" />
+                                   <Bar dataKey="oil" name="Passed (OIL)" stackId="a" fill="#f59e0b" onClick={(e) => { const n = e?.payload?.name || e?.name; if(n) handleDrillDown({ prod: n, status: 'Passed with OIL' }); }} className="cursor-pointer" />
+                                   <Bar dataKey="comp" name="Completed" stackId="a" fill="#10b981" radius={[4, 4, 0, 0]} onClick={(e) => { const n = e?.payload?.name || e?.name; if(n) handleDrillDown({ prod: n, status: 'Passed with Completed' }); }} className="cursor-pointer" />
+                                </BarChart>
+                             </ResponsiveContainer>
+                         )}
+                      </div>
+                   </div>
+                </div>
+
+                {/* Level 3: Analytics Deep Dive */}
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                   
+                   <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm flex flex-col lg:col-span-2">
+                       <h3 className="text-sm font-bold text-gray-700 flex items-center gap-2 mb-5 border-b pb-3"><Activity className="w-5 h-5 text-orange-500"/> Risk Analysis (การวิเคราะห์เชิงลึก)</h3>
+                       <div className="grid grid-cols-1 md:grid-cols-2 gap-8 h-full">
+                           <div>
+                               <div className="text-[10px] font-bold text-gray-400 tracking-wider uppercase mb-3 flex justify-between">
+                                  <span>วิเคราะห์ตาม Type งาน</span> <span>FAIL RATE %</span>
+                               </div>
+                               <div className="space-y-3">
+                                  {typeData.length === 0 ? <div className="text-center text-xs text-gray-400">ไม่มีข้อมูล</div> : typeData.map(t => (
+                                     <div key={t.name} onClick={() => handleDrillDown({ type: t.name })} className="flex items-center gap-3 cursor-pointer group">
+                                         <div className="w-16 text-xs font-bold text-gray-700 group-hover:text-blue-600 truncate transition-colors" title={t.name}>{t.name}</div>
+                                         <div className="flex-1 h-3 bg-gray-100 rounded-full overflow-hidden relative">
+                                             <div className={`h-full absolute left-0 top-0 transition-all duration-500 rounded-full ${t.failRate > 50 ? 'bg-red-500' : t.failRate > 20 ? 'bg-orange-400' : 'bg-emerald-500'}`} style={{width: `${t.failRate}%`}}></div>
+                                         </div>
+                                         <div className={`w-10 text-right text-xs font-black ${t.failRate > 0 ? 'text-gray-800' : 'text-gray-400'}`}>{t.failRate}%</div>
+                                     </div>
+                                  ))}
+                               </div>
+                           </div>
+                           <div>
+                               <div className="text-[10px] font-bold text-gray-400 tracking-wider uppercase mb-3 flex justify-between">
+                                  <span>วิเคราะห์สภาพหน้างาน (Not Final)</span> <span className="text-orange-500 font-black bg-orange-50 px-2 rounded">รวม {nonFinalTotal} งาน</span>
+                               </div>
+                               <div className="space-y-3">
+                                  {condData.length === 0 ? <div className="text-center text-xs text-gray-400 py-4 border border-dashed rounded-lg bg-gray-50/50">ทุกงานมีสถานะเป็น Final ทั้งหมด</div> : condData.map(c => (
+                                     <div key={c.name} onClick={() => handleDrillDown({ cond: c.name === 'ไม่มีระบุ (Blank)' ? 'BLANK_COND' : c.name })} className="flex items-center gap-3 cursor-pointer group">
+                                         <div className="w-28 text-[10px] font-bold text-gray-700 group-hover:text-blue-600 truncate transition-colors" title={c.name}>{c.name}</div>
+                                         <div className="flex-1 h-3 bg-gray-100 rounded-full overflow-hidden relative">
+                                             <div className="h-full absolute left-0 top-0 bg-orange-400 transition-all duration-500 rounded-full" style={{width: `${(c.total / Math.max(nonFinalTotal, 1)) * 100}%`}}></div>
+                                         </div>
+                                         <div className="w-8 text-right text-xs font-black text-gray-800">{c.total}</div>
+                                     </div>
+                                  ))}
+                               </div>
+                           </div>
+                       </div>
+                   </div>
+
+                   <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm flex flex-col relative group">
+                       <h3 className="text-sm font-bold text-gray-700 flex items-center justify-between mb-5">
+                           <span className="flex items-center gap-2"><CheckCircle2 className="w-5 h-5 text-emerald-500"/> ความพร้อมหน้างาน</span>
+                       </h3>
+                       <div className="flex flex-col justify-center h-full gap-6">
+                           <div>
+                               <div className="flex justify-between text-[10px] font-bold text-gray-400 tracking-wider mb-2">
+                                   <span>PRE-CHECK</span>
+                                   <span className="text-gray-700">{preCheckStats.OK + preCheckStats.NO} งาน</span>
+                               </div>
+                               <div className="h-8 w-full bg-gray-100 rounded-lg overflow-hidden flex relative shadow-inner">
+                                   <div onClick={()=>handleDrillDown({ pre: 'OK' })} className="h-full bg-blue-500 hover:bg-blue-600 transition-colors cursor-pointer flex items-center justify-center text-xs text-white font-bold" style={{width: `${(preCheckStats.OK/(preCheckStats.OK+preCheckStats.NO||1))*100}%`}}>
+                                       {preCheckStats.OK > 0 && `OK ${Math.round((preCheckStats.OK/(preCheckStats.OK+preCheckStats.NO||1))*100)}%`}
+                                   </div>
+                                   <div onClick={()=>handleDrillDown({ pre: 'NO' })} className="h-full bg-red-400 hover:bg-red-500 transition-colors cursor-pointer flex items-center justify-center text-xs text-white font-bold" style={{width: `${(preCheckStats.NO/(preCheckStats.OK+preCheckStats.NO||1))*100}%`}}>
+                                       {preCheckStats.NO > 0 && `NO ${Math.round((preCheckStats.NO/(preCheckStats.OK+preCheckStats.NO||1))*100)}%`}
+                                   </div>
+                               </div>
+                           </div>
+                           <div>
+                               <div className="flex justify-between text-[10px] font-bold text-gray-400 tracking-wider mb-2">
+                                   <span>BUZZER (ตัด N/A)</span>
+                                   <span className="text-gray-700">{buzzerStats.YES + buzzerStats.NO} งาน</span>
+                               </div>
+                               <div className="h-8 w-full bg-gray-100 rounded-lg overflow-hidden flex relative shadow-inner">
+                                   <div onClick={()=>handleDrillDown({ buz: 'YES' })} className="h-full bg-purple-500 hover:bg-purple-600 transition-colors cursor-pointer flex items-center justify-center text-xs text-white font-bold" style={{width: `${(buzzerStats.YES/(buzzerStats.YES+buzzerStats.NO||1))*100}%`}}>
+                                       {buzzerStats.YES > 0 && `YES ${Math.round((buzzerStats.YES/(buzzerStats.YES+buzzerStats.NO||1))*100)}%`}
+                                   </div>
+                                   <div onClick={()=>handleDrillDown({ buz: 'NO' })} className="h-full bg-red-400 hover:bg-red-500 transition-colors cursor-pointer flex items-center justify-center text-xs text-white font-bold" style={{width: `${(buzzerStats.NO/(buzzerStats.YES+buzzerStats.NO||1))*100}%`}}>
+                                       {buzzerStats.NO > 0 && `NO ${Math.round((buzzerStats.NO/(buzzerStats.YES+buzzerStats.NO||1))*100)}%`}
+                                   </div>
+                               </div>
+                           </div>
+                       </div>
+                   </div>
+
+                   {/* 🔥 Inspector Leaderboard แบบตารางเต็ม */}
+                   <div className="bg-white rounded-xl border border-gray-200 shadow-sm flex flex-col lg:col-span-3 overflow-hidden">
+                      <div className="p-4 border-b bg-gray-50/50">
+                          <h3 className="text-sm font-bold text-gray-700 flex items-center justify-between">
+                            <span className="flex items-center gap-2"><Users className="w-5 h-5 text-purple-600"/> Inspector Leaderboard (ลำดับคงที่)</span>
+                            <span className="text-[10px] font-medium text-gray-400">*คลิกที่รายชื่อเพื่อเจาะดูผลงาน</span>
+                          </h3>
+                      </div>
+                      <div className="overflow-x-auto">
+                          <table className="w-full text-left text-sm border-collapse">
+                              <thead>
+                                  <tr className="bg-gray-100 text-gray-500 text-[10px] uppercase tracking-wider border-b">
+                                      <th className="px-4 py-3 font-bold text-center w-16">Rank</th>
+                                      <th className="px-4 py-3 font-bold">Inspector Name</th>
+                                      <th className="px-4 py-3 font-bold text-center w-32">Total Inspected</th>
+                                      <th className="px-4 py-3 font-bold text-center w-32">FPY %</th>
+                                  </tr>
+                              </thead>
+                              <tbody className="divide-y divide-gray-100">
+                                   {leaderboardData.length === 0 ? <tr><td colSpan="4" className="text-center py-8 text-xs font-bold text-gray-400">ไม่มีข้อมูล</td></tr> : (
+                                      leaderboardData.map((d, i) => {
+                                         const rate = d.total > 0 ? Math.round((d.fpy / d.total) * 100) : 0;
+                                         return (
+                                         <tr key={i} onClick={()=>handleDrillDown({ insp: d.name })} className="hover:bg-blue-50 cursor-pointer transition-colors group">
+                                            <td className="px-4 py-3 text-center">
+                                                <div className={`inline-flex w-7 h-7 rounded-full items-center justify-center text-xs font-black mx-auto ${i===0?'bg-yellow-100 text-yellow-700 ring-2 ring-yellow-300':i===1?'bg-gray-200 text-gray-600':i===2?'bg-orange-100 text-orange-700':'bg-gray-50 text-gray-400'}`}>
+                                                   #{i+1}
+                                                </div>
+                                            </td>
+                                            <td className="px-4 py-3 font-bold text-gray-800 group-hover:text-blue-700 transition-colors">
+                                                {d.name}
+                                            </td>
+                                            <td className="px-4 py-3 text-center font-black text-gray-900">
+                                                {d.total} <span className="text-[10px] font-normal text-gray-400 ml-1">งาน</span>
+                                            </td>
+                                            <td className="px-4 py-3 text-center">
+                                                <span className={`inline-flex px-2.5 py-1 rounded-md text-[10px] font-black tracking-wide ${rate === 100 ? 'bg-emerald-100 text-emerald-700' : rate >= 80 ? 'bg-blue-50 text-blue-600' : 'bg-red-50 text-red-600'}`}>
+                                                  {rate}%
+                                                </span>
+                                            </td>
+                                         </tr>
+                                         )
+                                      })
+                                   )}
+                              </tbody>
+                          </table>
+                      </div>
+                   </div>
+
+                </div>
+              </>
+            )}
+          </div>
+        );
+      };
+
+      return (
+        <div className="min-h-screen p-2 sm:p-4 md:p-6 pb-24 md:pb-28 relative">
+          {toast && <div className="fixed top-4 right-4 z-50 toast-enter"><div className={`flex items-center gap-2 px-4 py-3 rounded-lg shadow-lg text-sm font-bold text-white ${toast.type==='error'?'bg-red-600':'bg-emerald-600'}`}>{toast.message}</div></div>}
+          
+          <div className="max-w-[1450px] mx-auto space-y-4">
+            <div className="bg-white rounded-xl shadow-sm border-t-4 border-[#E20015] p-5 flex flex-col sm:flex-row justify-between items-start sm:items-center relative">
+              <div className="absolute top-2 right-2 flex items-center bg-gray-50 rounded px-2 py-1 z-10 text-[10px] font-bold text-gray-500">
+                {syncStatus==='syncing'?<><RefreshCw className="w-3 h-3 text-blue-500 animate-spin mr-1"/> โหลด...</>:syncStatus==='success'?<><Cloud className="w-3 h-3 text-green-600 mr-1"/> {formatSyncTime(lastSyncedAt)}</>:<><CloudOff className="w-3 h-3 text-red-500 mr-1"/> ล้มเหลว</>}
+              </div>
+              <div className="flex items-center gap-3 w-full justify-between mt-4 sm:mt-0">
+                <div className="flex items-center gap-4">
+                   <div className="bg-gradient-to-br from-[#E20015] to-red-700 p-3 rounded-xl text-white shadow-md hidden sm:block"><LayoutDashboard className="w-6 h-6" /></div>
+                   <div>
+                       <h1 className="text-xl sm:text-2xl font-black text-gray-900 tracking-tight">Dashboard <span className="text-[#E20015]">and Pending</span></h1>
+                       <p className="text-xs font-bold text-gray-500 mt-1 uppercase tracking-wider">SAIS Database Management</p>
+                   </div>
+                </div>
+                <div className="flex gap-2">
+                  <button onClick={() => setIsHelpOpen(true)} className="p-2.5 bg-gray-100 hover:bg-gray-200 rounded-full text-gray-600 transition-colors" title="คู่มือการใช้งาน">
+                    <BookOpen className="w-5 h-5" />
+                  </button>
+                  <button onClick={() => setIsSettingsOpen(true)} className="p-2.5 bg-gray-100 hover:bg-gray-200 rounded-full text-gray-600 transition-colors" title="ตั้งค่ารายชื่อ Inspector">
+                    <Settings className="w-5 h-5" />
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {activeTab === 'dashboard' ? renderDashboard() : (
+              <div className="bg-white rounded-xl shadow-sm border border-gray-200 fade-in flex flex-col overflow-hidden">
+                <div className="p-4 border-b flex flex-col sm:flex-row justify-between items-center gap-4 bg-white">
+                  <h3 className="font-bold text-sm flex items-center gap-2 text-gray-800">
+                    <FileSpreadsheet className="text-blue-600 w-5 h-5"/> 
+                    PENDING RECORDS 
+                    <span className="bg-gray-800 text-white text-[10px] px-2.5 py-0.5 rounded-full">{displayedRecords.length}</span>
+                  </h3>
+                  
+                  <div className="flex w-full sm:w-auto gap-2 items-center flex-wrap sm:flex-nowrap relative justify-end">
+                    
+                    <div className="flex items-center gap-1.5 bg-white border border-gray-300 px-3 py-1.5 rounded-lg text-xs font-bold shadow-sm focus-within:ring-2 focus-within:ring-blue-100 transition-all">
+                       <Calendar className="w-4 h-4 text-gray-400"/>
+                       <select value={filterMonth} onChange={(e)=>setFilterMonth(e.target.value)} className="bg-transparent outline-none cursor-pointer text-blue-700">
+                          {MONTHS.map(m=><option key={m.value} value={m.value}>{m.label}</option>)}
+                       </select>
+                    </div>
+
+                    {/* 🔥 Search Debouncing: รอให้กดปุ่มค่อยทำการ Filter จริง */}
+                    <div className="flex items-center">
+                        <div className="relative w-full sm:w-48 group">
+                            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
+                            <input 
+                               type="text" 
+                               placeholder="ค้นหา Eq No / Site..." 
+                               value={searchInput} 
+                               onChange={(e)=>setSearchInput(e.target.value)} 
+                               onKeyDown={handleKeyDownSearch}
+                               className="w-full bg-gray-50 border border-gray-300 rounded-l-lg pl-9 pr-3 py-1.5 text-xs font-medium outline-none focus:bg-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all" 
+                            />
+                        </div>
+                        <button onClick={handleExecuteSearch} className="bg-gray-800 hover:bg-gray-700 text-white px-3 py-1.5 rounded-r-lg text-xs font-bold border border-gray-800 border-l-0 transition-colors">
+                            ค้นหา
+                        </button>
+                    </div>
+                    
+                    <button onClick={() => setIsColMenuOpen(true)} className="flex items-center justify-center bg-gray-100 hover:bg-gray-200 text-gray-600 p-2 rounded-lg border transition-colors" title="ตั้งค่าการแสดงผลคอลัมน์">
+                      <Columns className="w-4 h-4" />
+                    </button>
+
+                    <button onClick={openAddModal} className="flex items-center gap-1.5 bg-[#E20015] hover:bg-red-700 text-white px-4 py-1.5 rounded-lg font-bold text-xs shrink-0 transition-colors shadow-sm"><Plus className="w-4 h-4" /> <span className="hidden sm:inline">เพิ่มข้อมูล</span></button>
+                  </div>
+                </div>
+
+                {/* 🔥 Cross-Filtering Feedback Badges */}
+                {getActiveFilterBadges().length > 0 && (
+                  <div className="bg-blue-50/50 p-3 border-b border-blue-100 flex flex-wrap gap-2 items-center text-xs">
+                     <span className="font-bold text-gray-500 mr-1 flex items-center gap-1"><Filter className="w-3.5 h-3.5"/> ตัวกรองที่ใช้งานอยู่:</span>
+                     {getActiveFilterBadges().map(badge => (
+                         <div key={badge.key} className="flex items-center gap-1 bg-white border border-blue-200 text-blue-700 px-2 py-1 rounded-md shadow-sm text-[10px] font-bold group">
+                             {badge.label}
+                             <button onClick={() => removeFilter(badge.key, badge.type)} className="hover:bg-blue-100 rounded p-0.5 text-blue-400 hover:text-blue-700 transition-colors">
+                                 <X className="w-3 h-3" />
+                             </button>
+                         </div>
+                     ))}
+                     {hasTableFilters && (
+                         <button onClick={clearTableFilters} className="text-[10px] font-bold text-red-500 hover:text-red-700 hover:underline ml-1">
+                             ล้างทั้งหมด
+                         </button>
+                     )}
+                  </div>
+                )}
+                
+                <div className="overflow-x-auto custom-scrollbar max-h-[60vh] bg-white">
+                  <table className="w-full text-xs text-left table-fixed">
+                    <thead className="sticky-header uppercase text-[10px] text-gray-500 tracking-wider">
+                      <tr>
+                        {!hiddenCols.has('no') && (
+                          <th className="px-2 py-3 border-r border-b align-top relative group select-none" style={{ width: colWidths.no, minWidth: colWidths.no, maxWidth: colWidths.no }}>
+                            <div className="overflow-hidden truncate pb-1">
+                                <div className="text-gray-500 font-bold text-center">No.</div>
+                            </div>
+                            <div onMouseDown={(e) => startResize(e, 'no')} className="absolute right-0 top-0 bottom-0 w-2 cursor-col-resize hover:bg-blue-400 bg-transparent z-20 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                          </th>
+                        )}
+                        {!hiddenCols.has('inspDate') && (
+                          <th className="px-2 py-3 border-r border-b align-top relative group select-none" style={{ width: colWidths.inspDate, minWidth: colWidths.inspDate, maxWidth: colWidths.inspDate }}>
+                            <div className="overflow-hidden truncate pb-1">
+                                <div className="text-gray-500 font-bold text-center">Insp. Date</div>
+                            </div>
+                            <select name="inspDate" value={tableFilters.inspDate} onChange={handleTableFilter} className="w-full border border-gray-300 rounded bg-white text-gray-800 text-[10px] p-0.5 outline-none font-bold cursor-pointer mt-1"><option value="">ทั้งหมด</option>{uniqueTableOptions.inspDate.map(x=><option key={x} value={x}>{x}</option>)}</select>
+                            <div onMouseDown={(e) => startResize(e, 'inspDate')} className="absolute right-0 top-0 bottom-0 w-2 cursor-col-resize hover:bg-blue-400 bg-transparent z-20 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                          </th>
+                        )}
+                        {!hiddenCols.has('eqNo') && (
+                          <th className="px-2 py-3 border-r border-b align-top relative group select-none" style={{ width: colWidths.eqNo, minWidth: colWidths.eqNo, maxWidth: colWidths.eqNo }}>
+                            <div className="overflow-hidden truncate pb-1">
+                                <div className="font-black text-black text-center">Eq. No.</div>
+                            </div>
+                            <select name="eqNo" value={tableFilters.eqNo} onChange={handleTableFilter} className="w-full border border-gray-300 rounded bg-gray-50 text-black text-[10px] p-0.5 outline-none font-bold cursor-pointer mt-1"><option value="">ทั้งหมด</option>{uniqueTableOptions.eqNo.map(x=><option key={x} value={x}>{x}</option>)}</select>
+                            <div onMouseDown={(e) => startResize(e, 'eqNo')} className="absolute right-0 top-0 bottom-0 w-2 cursor-col-resize hover:bg-blue-400 bg-transparent z-20 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                          </th>
+                        )}
+                        {!hiddenCols.has('genDate') && (
+                          <th className="px-2 py-3 border-r border-b align-top relative group select-none" style={{ width: colWidths.genDate, minWidth: colWidths.genDate, maxWidth: colWidths.genDate }}>
+                            <div className="overflow-hidden truncate pb-1">
+                                <div className="text-gray-500 font-bold text-center">Gen. Date</div>
+                            </div>
+                            <select name="genDate" value={tableFilters.genDate} onChange={handleTableFilter} className="w-full border border-gray-300 rounded bg-white text-gray-800 text-[10px] p-0.5 outline-none font-bold cursor-pointer mt-1"><option value="">ทั้งหมด</option>{uniqueTableOptions.genDate.map(x=><option key={x} value={x}>{x}</option>)}</select>
+                            <div onMouseDown={(e) => startResize(e, 'genDate')} className="absolute right-0 top-0 bottom-0 w-2 cursor-col-resize hover:bg-blue-400 bg-transparent z-20 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                          </th>
+                        )}
+                        {!hiddenCols.has('sys') && (
+                          <th className="px-2 py-3 border-r border-b align-top relative group select-none" style={{ width: colWidths.sys, minWidth: colWidths.sys, maxWidth: colWidths.sys }}>
+                            <div className="overflow-hidden truncate pb-1">
+                                <div className="text-gray-500 font-bold text-center">Gen. Sys</div>
+                            </div>
+                            <select name="sys" value={tableFilters.sys} onChange={handleTableFilter} className="w-full border border-gray-300 rounded bg-white text-gray-800 text-[10px] p-0.5 outline-none font-bold cursor-pointer mt-1"><option value="">ทั้งหมด</option>{uniqueTableOptions.sys.map(x=><option key={x} value={x}>{x}</option>)}</select>
+                            <div onMouseDown={(e) => startResize(e, 'sys')} className="absolute right-0 top-0 bottom-0 w-2 cursor-col-resize hover:bg-blue-400 bg-transparent z-20 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                          </th>
+                        )}
+                        {!hiddenCols.has('insp') && (
+                          <th className="px-2 py-3 border-r border-b align-top relative group select-none" style={{ width: colWidths.insp, minWidth: colWidths.insp, maxWidth: colWidths.insp }}>
+                            <div className="overflow-hidden truncate pb-1">
+                                <div className="text-gray-500 font-bold">Inspector Name</div>
+                            </div>
+                            <select name="insp" value={tableFilters.insp} onChange={handleTableFilter} className="w-full border border-gray-300 rounded bg-white text-gray-800 text-[10px] p-0.5 outline-none font-bold cursor-pointer mt-1"><option value="">ทั้งหมด</option>{uniqueTableOptions.insp.map(x=><option key={x} value={x}>{x}</option>)}</select>
+                            <div onMouseDown={(e) => startResize(e, 'insp')} className="absolute right-0 top-0 bottom-0 w-2 cursor-col-resize hover:bg-blue-400 bg-transparent z-20 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                          </th>
+                        )}
+                        {!hiddenCols.has('prod') && (
+                          <th className="px-2 py-3 border-r border-b align-top relative group select-none" style={{ width: colWidths.prod, minWidth: colWidths.prod, maxWidth: colWidths.prod }}>
+                            <div className="overflow-hidden truncate pb-1">
+                                <div className="text-gray-500 font-bold text-center">Product Line</div>
+                            </div>
+                            <select name="prod" value={tableFilters.prod} onChange={handleTableFilter} className="w-full border border-gray-300 rounded bg-white text-gray-800 text-[10px] p-0.5 outline-none font-bold cursor-pointer mt-1"><option value="">ทั้งหมด</option>{uniqueTableOptions.prod.map(x=><option key={x} value={x}>{x}</option>)}</select>
+                            <div onMouseDown={(e) => startResize(e, 'prod')} className="absolute right-0 top-0 bottom-0 w-2 cursor-col-resize hover:bg-blue-400 bg-transparent z-20 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                          </th>
+                        )}
+                        {!hiddenCols.has('type') && (
+                          <th className="px-2 py-3 border-r border-b align-top relative group select-none" style={{ width: colWidths.type, minWidth: colWidths.type, maxWidth: colWidths.type }}>
+                            <div className="overflow-hidden truncate pb-1">
+                                <div className="text-gray-500 font-bold text-center">Type</div>
+                            </div>
+                            <select name="type" value={tableFilters.type} onChange={handleTableFilter} className={`w-full border rounded text-[10px] p-0.5 outline-none font-bold cursor-pointer mt-1 ${tableFilters.type === 'NI CNX' ? 'bg-green-50 border-green-200 text-green-700' : tableFilters.type === 'NI HKT' ? 'bg-pink-50 border-pink-200 text-pink-700' : 'bg-white border-gray-300 text-gray-800'}`}>
+                               <option value="" className="text-gray-800 bg-white">ทั้งหมด</option>
+                               {uniqueTableOptions.type.map(x=><option key={x} value={x} className={x === 'NI CNX' ? 'text-green-600 font-bold bg-white' : x === 'NI HKT' ? 'text-pink-600 font-bold bg-white' : 'text-gray-800 bg-white'}>{x}</option>)}
+                            </select>
+                            <div onMouseDown={(e) => startResize(e, 'type')} className="absolute right-0 top-0 bottom-0 w-2 cursor-col-resize hover:bg-blue-400 bg-transparent z-20 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                          </th>
+                        )}
+                        {!hiddenCols.has('site') && (
+                          <th className="px-2 py-3 border-r border-b align-top relative group select-none" style={{ width: colWidths.site, minWidth: colWidths.site, maxWidth: colWidths.site }}>
+                            <div className="overflow-hidden truncate pb-1">
+                                <div className="text-gray-500 font-bold">Job Site</div>
+                            </div>
+                            <select name="site" value={tableFilters.site} onChange={handleTableFilter} className="w-full border border-gray-300 rounded bg-white text-gray-800 text-[10px] p-0.5 outline-none font-bold cursor-pointer mt-1"><option value="">ทั้งหมด</option>{uniqueTableOptions.site.map(x=><option key={x} value={x}>{x}</option>)}</select>
+                            <div onMouseDown={(e) => startResize(e, 'site')} className="absolute right-0 top-0 bottom-0 w-2 cursor-col-resize hover:bg-blue-400 bg-transparent z-20 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                          </th>
+                        )}
+                        {!hiddenCols.has('unit') && (
+                          <th className="px-2 py-3 border-r border-b align-top relative group select-none" style={{ width: colWidths.unit, minWidth: colWidths.unit, maxWidth: colWidths.unit }}>
+                            <div className="overflow-hidden truncate pb-1">
+                                <div className="text-gray-500 font-bold text-center">Unit</div>
+                            </div>
+                            <select name="unit" value={tableFilters.unit} onChange={handleTableFilter} className="w-full border border-gray-300 rounded bg-white text-gray-800 text-[10px] p-0.5 outline-none font-bold cursor-pointer mt-1"><option value="">ทั้งหมด</option>{uniqueTableOptions.unit.map(x=><option key={x} value={x}>{x}</option>)}</select>
+                            <div onMouseDown={(e) => startResize(e, 'unit')} className="absolute right-0 top-0 bottom-0 w-2 cursor-col-resize hover:bg-blue-400 bg-transparent z-20 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                          </th>
+                        )}
+                        {!hiddenCols.has('cond') && (
+                          <th className="px-2 py-3 border-r border-b align-top relative group select-none" style={{ width: colWidths.cond, minWidth: colWidths.cond, maxWidth: colWidths.cond }}>
+                            <div className="overflow-hidden truncate pb-1">
+                                <div className="text-gray-500 font-bold text-center">Condition</div>
+                            </div>
+                            <select name="cond" value={tableFilters.cond} onChange={handleTableFilter} className="w-full border border-gray-300 rounded bg-white text-gray-800 text-[10px] p-0.5 outline-none font-bold cursor-pointer mt-1">
+                               <option value="">ทั้งหมด</option>
+                               <option value="BLANK_COND" className="hidden">ไม่ระบุ</option>
+                               {uniqueTableOptions.cond.map(x=><option key={x} value={x}>{x}</option>)}
+                            </select>
+                            <div onMouseDown={(e) => startResize(e, 'cond')} className="absolute right-0 top-0 bottom-0 w-2 cursor-col-resize hover:bg-blue-400 bg-transparent z-20 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                          </th>
+                        )}
+                        {!hiddenCols.has('pre') && (
+                          <th className="px-2 py-3 border-r border-b align-top relative group select-none" style={{ width: colWidths.pre, minWidth: colWidths.pre, maxWidth: colWidths.pre }}>
+                            <div className="overflow-hidden truncate pb-1">
+                                <div className="text-gray-500 font-bold text-center">Pre Check</div>
+                            </div>
+                            <select name="pre" value={tableFilters.pre} onChange={handleTableFilter} className="w-full border border-gray-300 rounded bg-white text-gray-800 text-[10px] p-0.5 outline-none font-bold cursor-pointer mt-1"><option value="">ทั้งหมด</option>{uniqueTableOptions.pre.map(x=><option key={x} value={x}>{x}</option>)}</select>
+                            <div onMouseDown={(e) => startResize(e, 'pre')} className="absolute right-0 top-0 bottom-0 w-2 cursor-col-resize hover:bg-blue-400 bg-transparent z-20 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                          </th>
+                        )}
+                        {!hiddenCols.has('buz') && (
+                          <th className="px-2 py-3 border-r border-b align-top relative group select-none" style={{ width: colWidths.buz, minWidth: colWidths.buz, maxWidth: colWidths.buz }}>
+                            <div className="overflow-hidden truncate pb-1">
+                                <div className="text-gray-500 font-bold text-center">Buzzer</div>
+                            </div>
+                            <select name="buz" value={tableFilters.buz} onChange={handleTableFilter} className="w-full border border-gray-300 rounded bg-white text-gray-800 text-[10px] p-0.5 outline-none font-bold cursor-pointer mt-1"><option value="">ทั้งหมด</option>{uniqueTableOptions.buz.map(x=><option key={x} value={x}>{x}</option>)}</select>
+                            <div onMouseDown={(e) => startResize(e, 'buz')} className="absolute right-0 top-0 bottom-0 w-2 cursor-col-resize hover:bg-blue-400 bg-transparent z-20 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                          </th>
+                        )}
+                        {!hiddenCols.has('remark') && (
+                          <th className="px-2 py-3 border-r border-b align-top relative group select-none" style={{ width: colWidths.remark, minWidth: colWidths.remark, maxWidth: colWidths.remark }}>
+                            <div className="overflow-hidden truncate pb-1">
+                                <div className="text-gray-500 font-bold">Remark</div>
+                            </div>
+                            <div onMouseDown={(e) => startResize(e, 'remark')} className="absolute right-0 top-0 bottom-0 w-2 cursor-col-resize hover:bg-blue-400 bg-transparent z-20 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                          </th>
+                        )}
+                        {!hiddenCols.has('status') && (
+                          <th className="px-2 py-3 border-b align-top relative group select-none" style={{ width: colWidths.status, minWidth: colWidths.status, maxWidth: colWidths.status }}>
+                            <div className="overflow-hidden truncate pb-1">
+                                <div className="text-blue-700 font-bold text-center">SAIS Status</div>
+                            </div>
+                            <select name="status" value={tableFilters.status} onChange={handleTableFilter} className="w-full border border-blue-200 rounded bg-blue-50 text-blue-700 text-[10px] p-0.5 outline-none font-bold cursor-pointer mt-1">
+                               <option value="">ทั้งหมด</option>
+                               <option value="FPY" className="hidden">FPY (Pass+OIL)</option>
+                               {uniqueTableOptions.status.map(x=><option key={x} value={x}>{x}</option>)}
+                            </select>
+                            <div onMouseDown={(e) => startResize(e, 'status')} className="absolute right-0 top-0 bottom-0 w-2 cursor-col-resize hover:bg-blue-400 bg-transparent z-20 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                          </th>
+                        )}
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                      {processedPaginatedRecords.length === 0 ? <tr><td colSpan="15" className="py-10 text-center text-gray-400 text-xs font-medium">ไม่พบข้อมูลที่ตรงกับเงื่อนไขการค้นหา</td></tr> : processedPaginatedRecords.map((r, i) => (
+                        <tr key={r.id} onClick={()=>openViewModal(r)} className={`hover:bg-blue-50 cursor-pointer transition-colors ${r.bgClass} ${r.saisStatus==='ยกเลิก'?'opacity-50':''}`}>
+                          {!hiddenCols.has('no') && (
+                            <td style={{ width: colWidths.no, maxWidth: colWidths.no }} className="px-3 py-2.5 border-r border-gray-100 text-center text-gray-400 truncate">
+                              {(currentPage-1)*ITEMS_PER_PAGE+i+1}
+                            </td>
+                          )}
+                          {!hiddenCols.has('inspDate') && (
+                            <td style={{ width: colWidths.inspDate, maxWidth: colWidths.inspDate }} className="px-3 py-2.5 border-r border-gray-100 font-medium text-center truncate">
+                               {r.showDate ? <span className="font-bold text-gray-800">{r.displayDateFormatted}</span> : ''}
+                            </td>
+                          )}
+                          {!hiddenCols.has('eqNo') && (
+                            <td style={{ width: colWidths.eqNo, maxWidth: colWidths.eqNo }} className="px-3 py-2.5 border-r border-gray-100 font-black text-black text-center truncate">
+                              {r.equipmentNo}
+                            </td>
+                          )}
+                          {!hiddenCols.has('genDate') && (
+                            <td style={{ width: colWidths.genDate, maxWidth: colWidths.genDate }} className="px-3 py-2.5 border-r border-gray-100 text-gray-500 text-center truncate">
+                              {formatDateToDDMMYY(r.generatedDate)}
+                            </td>
+                          )}
+                          {!hiddenCols.has('sys') && (
+                            <td style={{ width: colWidths.sys, maxWidth: colWidths.sys }} className="px-3 py-2.5 border-r border-gray-100 text-gray-500 text-center truncate">
+                              {r.generatedInSystem||'-'}
+                            </td>
+                          )}
+                          {!hiddenCols.has('insp') && (
+                            <td style={{ width: colWidths.insp, maxWidth: colWidths.insp }} className="px-3 py-2.5 border-r border-gray-100 font-bold text-gray-700 truncate">
+                              {r.inspectorName}
+                            </td>
+                          )}
+                          {!hiddenCols.has('prod') && (
+                            <td style={{ width: colWidths.prod, maxWidth: colWidths.prod }} className="px-3 py-2.5 border-r border-gray-100 text-center truncate">
+                              {r.productLine}
+                            </td>
+                          )}
+                          {!hiddenCols.has('type') && (
+                            <td style={{ width: colWidths.type, maxWidth: colWidths.type }} className="px-3 py-2.5 border-r border-gray-100 text-center truncate">
+                              {r.type === 'NI CNX' ? <span className="text-emerald-600 font-black bg-emerald-50 px-1.5 py-0.5 rounded">{r.type}</span> : 
+                               r.type === 'NI HKT' ? <span className="text-pink-600 font-black bg-pink-50 px-1.5 py-0.5 rounded">{r.type}</span> : 
+                               r.type}
+                            </td>
+                          )}
+                          {!hiddenCols.has('site') && (
+                            <td style={{ width: colWidths.site, maxWidth: colWidths.site }} className="px-3 py-2.5 border-r border-gray-100 truncate text-gray-600">
+                              {r.jobSite}
+                            </td>
+                          )}
+                          {!hiddenCols.has('unit') && (
+                            <td style={{ width: colWidths.unit, maxWidth: colWidths.unit }} className="px-3 py-2.5 border-r border-gray-100 text-center font-bold truncate">
+                              {r.unit}
+                            </td>
+                          )}
+                          {!hiddenCols.has('cond') && (
+                            <td style={{ width: colWidths.cond, maxWidth: colWidths.cond }} className="px-3 py-2.5 border-r border-gray-100 text-center truncate">
+                              {r.condition === 'TEMPORARY POWER SUPPLY' ? (
+                                <span className="text-yellow-600 font-black">{r.condition}</span>
+                              ) : r.condition === 'BUILDER LIFT' ? (
+                                <span className="text-orange-600 font-black">{r.condition}</span>
+                              ) : (
+                                r.condition || '-'
+                              )}
+                            </td>
+                          )}
+                          {!hiddenCols.has('pre') && (
+                            <td style={{ width: colWidths.pre, maxWidth: colWidths.pre }} className="px-3 py-2.5 border-r border-gray-100 text-center truncate">
+                              {r.preCheck === 'NO' ? <span className="text-red-600 font-black">NO</span> : <span className="text-gray-500">{r.preCheck || '-'}</span>}
+                            </td>
+                          )}
+                          {!hiddenCols.has('buz') && (
+                            <td style={{ width: colWidths.buz, maxWidth: colWidths.buz }} className="px-3 py-2.5 border-r border-gray-100 text-center truncate">
+                              {r.buzzer === 'NO' ? <span className="text-red-600 font-black">NO</span> : <span className="text-gray-500">{r.buzzer || '-'}</span>}
+                            </td>
+                          )}
+                          {!hiddenCols.has('remark') && (
+                            <td style={{ width: colWidths.remark, maxWidth: colWidths.remark }} className="px-3 py-2.5 border-r border-gray-100 text-gray-500 truncate">
+                              {(() => { 
+                                 const h = parseRemarkHistory(r.remark); 
+                                 return h.length > 0 && h[0].text ? <span className="flex items-center gap-1 text-yellow-700 bg-yellow-50 px-1.5 py-0.5 rounded-sm"><MessageSquare className="w-3 h-3"/> {h[h.length-1].text}</span> : '-'; 
+                              })()}
+                            </td>
+                          )}
+                          {!hiddenCols.has('status') && (
+                            <td style={{ width: colWidths.status, maxWidth: colWidths.status }} className="px-3 py-2.5 text-center truncate">
+                              <span className={`inline-flex px-2 py-0.5 rounded text-[10px] font-bold border ${r.saisStatus==='Passed with Completed'?'bg-emerald-50 text-emerald-700 border-emerald-200':r.saisStatus==='Failed'?'bg-red-50 text-red-700 border-red-200':r.saisStatus==='Passed with OIL'?'bg-amber-50 text-amber-700 border-amber-200':r.saisStatus==='ยกเลิก'?'bg-gray-800 text-gray-300 border-gray-900':'bg-gray-50 text-gray-500 border-gray-200'}`}>
+                                {r.saisStatus||'PENDING'}
+                              </span>
+                            </td>
+                          )}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <div className="flex justify-between items-center p-3 bg-gray-50 border-t">
+                  <span className="text-[10px] font-bold text-gray-500">แสดง {processedPaginatedRecords.length>0?(currentPage-1)*ITEMS_PER_PAGE+1:0} - {Math.min(currentPage*ITEMS_PER_PAGE, displayedRecords.length)} จาก {displayedRecords.length}</span>
+                  <div className="flex items-center gap-2"><button disabled={currentPage===1} onClick={()=>setCurrentPage(p=>p-1)} className="p-1 bg-white border rounded disabled:opacity-30 hover:bg-gray-100"><ChevronLeft className="w-4 h-4"/></button><span className="text-[10px] font-bold px-2">{currentPage} / {totalPages||1}</span><button disabled={currentPage>=totalPages||totalPages===0} onClick={()=>setCurrentPage(p=>p+1)} className="p-1 bg-white border rounded disabled:opacity-30 hover:bg-gray-100"><ChevronRight className="w-4 h-4"/></button></div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div className={`fixed bottom-0 left-0 right-0 bg-white border-t z-40 pb-safe transition-transform ${isNavVisible?'translate-y-0':'translate-y-full'} shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]`}>
+            <div className="max-w-[1450px] mx-auto flex justify-around p-1.5">
+              <button onClick={()=>{setActiveTab('dashboard');window.scrollTo(0,0);}} className={`flex flex-col items-center w-1/2 py-2 rounded-lg transition-colors ${activeTab==='dashboard'?'text-[#E20015] bg-red-50 font-bold':'text-gray-400 hover:bg-gray-50'}`}>
+                <BarChart2 className="w-5 h-5 mb-0.5"/><span className="text-[10px] tracking-wider">DASHBOARD</span>
+              </button>
+              <button onClick={()=>{setActiveTab('records');window.scrollTo(0,0);}} className={`flex flex-col items-center w-1/2 py-2 rounded-lg transition-colors ${activeTab==='records'?'text-[#E20015] bg-red-50 font-bold':'text-gray-400 hover:bg-gray-50'}`}>
+                <FileSpreadsheet className="w-5 h-5 mb-0.5"/><span className="text-[10px] tracking-wider">PENDING</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Modal ตั้งค่าการแสดง/ปรับขนาดคอลัมน์ */}
+          {isColMenuOpen && (
+            <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex justify-center items-end sm:items-center p-4 fade-in" onClick={() => setIsColMenuOpen(false)}>
+              <div className="bg-white rounded-t-2xl sm:rounded-2xl shadow-xl w-full max-w-sm flex flex-col slide-up overflow-hidden" onClick={e => e.stopPropagation()}>
+                 <div className="p-4 border-b flex justify-between items-center bg-gray-50">
+                    <span className="font-bold text-sm flex items-center gap-2 text-gray-800"><Columns className="w-4 h-4 text-blue-600"/> การแสดงผลคอลัมน์</span>
+                    <button onClick={() => setIsColMenuOpen(false)}><X className="w-5 h-5 text-gray-400 hover:text-gray-600"/></button>
+                 </div>
+                 <div className="p-4 bg-white grid grid-cols-2 gap-y-3 gap-x-3 max-h-[50vh] overflow-y-auto">
+                    {COLUMNS_DEF.map(col => (
+                      <label key={col.id} className={`flex items-center gap-2 text-xs p-2 rounded-lg border cursor-pointer transition-all ${hiddenCols.has(col.id) ? 'bg-gray-50 border-gray-200' : 'bg-blue-50 border-blue-200 shadow-sm'}`}>
+                        <input type="checkbox" checked={!hiddenCols.has(col.id)} onChange={() => toggleColumn(col.id)} className="accent-blue-600 w-3.5 h-3.5" />
+                        <span className={`font-bold ${hiddenCols.has(col.id) ? 'text-gray-400' : 'text-blue-700'}`}>{col.label}</span>
+                      </label>
+                    ))}
+                 </div>
+                 <div className="p-4 border-t bg-gray-50 flex flex-wrap justify-between items-center gap-2">
+                    <div className="flex gap-3">
+                       <button onClick={clearHiddenCols} className="text-blue-600 font-bold text-xs hover:underline py-1 hover:text-blue-800">แสดงทั้งหมด</button>
+                       <span className="text-gray-300">|</span>
+                       <button onClick={resetColWidths} className="text-red-600 font-bold text-xs hover:underline py-1 hover:text-red-800">รีเซ็ตขนาด</button>
+                    </div>
+                    <button onClick={() => setIsColMenuOpen(false)} className="bg-gray-800 hover:bg-gray-900 text-white px-5 py-2 rounded-lg text-xs font-bold transition-colors ml-auto shadow-sm">เสร็จสิ้น</button>
+                 </div>
+              </div>
+            </div>
+          )}
+
+          {/* Help/User Manual Modal */}
+          {isHelpOpen && (
+            <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex justify-center items-end sm:items-center sm:p-4">
+              <div className="bg-white w-full sm:h-auto sm:rounded-2xl sm:max-w-3xl h-[85vh] sm:max-h-[85vh] flex flex-col slide-up overflow-hidden">
+                <div className="bg-gray-50 p-4 border-b flex justify-between items-center shrink-0">
+                  <div className="flex items-center gap-2 font-black text-sm">
+                    <BookOpen className="w-5 h-5 text-[#E20015]" /> คู่มือการใช้งานระบบ V2.1
+                  </div>
+                  <button onClick={() => setIsHelpOpen(false)}><X className="w-5 h-5 text-gray-400 hover:text-gray-800" /></button>
+                </div>
+
+                <div className="p-5 overflow-y-auto custom-scrollbar flex-1 bg-gray-50/50">
+                    <div className="space-y-4 text-sm text-gray-700">
+                      <div className="bg-white p-5 rounded-xl border shadow-sm">
+                        <h4 className="font-bold flex items-center gap-2 text-gray-900 mb-3 border-b pb-2"><TrendingUp className="w-5 h-5 text-emerald-500"/> MoM Trend & Analytics</h4>
+                        <ul className="space-y-3">
+                          <li className="flex gap-3 items-start"><span className="bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded font-black text-xs shrink-0 mt-0.5">การเติบโต</span> <div>ระบบจะคำนวณ <b>Trend (+/- %)</b> ของอัตรา FPY เทียบกับเดือนก่อนหน้า (หรือปีก่อนหน้า) ให้โดยอัตโนมัติ เพื่อดูแนวโน้มคุณภาพงาน</div></li>
+                          <li className="flex gap-3 items-start"><span className="bg-blue-100 text-blue-700 px-2 py-0.5 rounded font-black text-xs shrink-0 mt-0.5">กราฟแบบใหม่</span> <div>กราฟสามารถเอาเมาส์ชี้เพื่อดูรายละเอียด (Tooltip) ได้ และคลิกที่ส่วนของกราฟเพื่อคัดกรองข้อมูลไปยังหน้า Pending ได้ทันที</div></li>
+                        </ul>
+                      </div>
+                      <div className="bg-white p-5 rounded-xl border shadow-sm">
+                        <h4 className="font-bold flex items-center gap-2 text-gray-900 mb-3 border-b pb-2"><Zap className="w-5 h-5 text-amber-500"/> Search & Performance</h4>
+                        <ul className="space-y-3 text-sm">
+                          <li className="flex gap-3 items-start"><span className="bg-amber-100 text-amber-700 px-2 py-0.5 rounded font-black text-xs shrink-0 mt-0.5">ค้นหาแบบใหม่</span> <div>พิมพ์คำค้นหาให้เสร็จก่อน แล้วกด <b>"Enter" หรือปุ่มค้นหา</b> ระบบจึงจะเริ่มทำงาน ช่วยแก้ปัญหาเว็บค้างเวลาพิมพ์ต่อเนื่อง</div></li>
+                          <li className="flex gap-3 items-start"><span className="bg-gray-200 px-2 py-0.5 rounded font-black text-xs shrink-0 mt-0.5">ป้ายกำกับ</span> <div>หน้า Pending มีแถบ <b>"ป้ายกำกับ" (Filter Badges)</b> โชว์ให้เห็นว่ากำลังดูข้อมูลภายใต้เงื่อนไขใดอยู่ สามารถกด 'X' เพื่อลบเงื่อนไขได้</div></li>
+                        </ul>
+                      </div>
+                    </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Settings Modal */}
+          {isSettingsOpen && (
+            <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex justify-center items-end sm:items-center sm:p-4 fade-in">
+              <div className="bg-white w-full sm:h-auto sm:rounded-2xl sm:max-w-3xl h-[85vh] sm:max-h-[85vh] flex flex-col slide-up overflow-hidden">
+                <div className="bg-gray-50 p-4 border-b flex justify-between items-center shrink-0">
+                  <div className="flex items-center gap-2 font-black text-sm">
+                    <Settings className="w-5 h-5 text-blue-600" /> ตั้งค่า Inspector & Certificates
+                  </div>
+                  <button onClick={() => setIsSettingsOpen(false)}><X className="w-5 h-5 text-gray-400 hover:text-gray-800" /></button>
+                </div>
+                <div className="p-4 overflow-y-auto custom-scrollbar flex-1 space-y-4 bg-gray-50/50">
+                  <div className="text-xs text-blue-800 bg-blue-50/80 p-3 rounded-lg border border-blue-200 flex items-start gap-3 shadow-sm">
+                     <Cloud className="w-6 h-6 shrink-0 mt-0.5 text-blue-500" />
+                     <div>
+                       <strong className="block mb-0.5 text-sm">เชื่อมต่อข้อมูลออนไลน์ (Cloud Sync)</strong>
+                       ข้อมูลการตั้งค่าผู้ตรวจในหน้านี้จะถูกบันทึกลงในฐานข้อมูล (Google Sheets ชีต 'Inspectors') ทันที และซิงค์ตรงกันในทุกอุปกรณ์
+                     </div>
+                  </div>
+                  
+                  {inspectorsData.map((insp, idx) => (
+                    <div key={idx} className="border border-gray-200 rounded-xl p-4 bg-white shadow-sm hover:border-blue-300 transition-colors">
+                      <div className="flex justify-between items-center mb-4">
+                        <div className="flex items-center gap-2 w-full max-w-sm relative">
+                          <Users className="w-5 h-5 text-gray-400 absolute left-3" />
+                          <input type="text" value={insp.name} onChange={(e) => updateInspectorName(idx, e.target.value)} className="font-bold border rounded-lg bg-gray-50 outline-none pl-10 pr-3 py-2 w-full focus:bg-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all text-sm" placeholder="พิมพ์ชื่อ-สกุล..." />
+                        </div>
+                        <button onClick={() => deleteInspector(idx)} className="text-red-500 p-2 hover:bg-red-50 border border-transparent hover:border-red-200 rounded-lg transition-colors flex items-center gap-1.5 text-xs font-bold">
+                          <Trash2 className="w-4 h-4" /> <span className="hidden sm:inline">ลบรายชื่อ</span>
+                        </button>
+                      </div>
+                      
+                      <div className="bg-gray-50 rounded-lg p-3 border">
+                        <div className="flex justify-between items-center mb-3">
+                          <div className="text-[10px] font-bold text-gray-500 uppercase tracking-wider flex items-center gap-1"><Award className="w-3.5 h-3.5"/> Product Lines (Certificates)</div>
+                          <div className="flex gap-2 bg-white rounded-md border p-1 shadow-sm">
+                            <button onClick={() => selectAllCerts(idx)} className="text-[10px] font-bold text-blue-600 hover:bg-blue-50 px-2 py-0.5 rounded transition-colors flex items-center gap-1"><Check className="w-3 h-3"/> เลือกทั้งหมด</button>
+                            <span className="border-r border-gray-200"></span>
+                            <button onClick={() => clearAllCerts(idx)} className="text-[10px] font-bold text-gray-500 hover:text-red-600 hover:bg-red-50 px-2 py-0.5 rounded transition-colors flex items-center gap-1"><X className="w-3 h-3"/> ล้างค่า</button>
+                          </div>
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                          {PRODUCT_LINES.map(pl => {
+                            const isChecked = insp.certs.includes(pl);
+                            return (
+                              <button key={pl} onClick={() => toggleCert(idx, pl)} className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border cursor-pointer select-none transition-all ${isChecked ? 'bg-blue-600 border-blue-600 text-white font-bold shadow-md' : 'bg-white text-gray-500 hover:bg-gray-100 hover:border-gray-300'}`}>
+                                {isChecked && <CheckCircle2 className="w-3.5 h-3.5" />}
+                                {pl}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                  <button onClick={addInspector} className="w-full py-4 border-2 border-dashed border-gray-300 rounded-xl text-gray-500 font-bold flex items-center justify-center gap-2 hover:bg-gray-50 hover:text-[#E20015] hover:border-[#E20015] transition-all">
+                    <Plus className="w-5 h-5" /> เพิ่มรายชื่อ Inspector
+                  </button>
+                </div>
+                <div className="bg-white p-4 border-t flex justify-end shrink-0 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
+                  <button onClick={saveSettingsOnline} disabled={isSubmitting} className="px-6 py-2.5 bg-gray-900 text-white rounded-lg font-bold flex items-center gap-2 disabled:bg-gray-400 shadow-sm hover:bg-black transition-all">
+                    {isSubmitting ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />} บันทึกการตั้งค่า
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Form Modal (บันทึกข้อมูล) */}
+          {isModalOpen && (
+            <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex justify-center items-end sm:items-center sm:p-4 fade-in">
+              <div className="bg-white w-full sm:rounded-2xl sm:max-w-3xl max-h-[95vh] flex flex-col slide-up overflow-hidden">
+                <div className="bg-gray-50 p-4 border-b flex justify-between items-center shrink-0">
+                  <h2 className="font-black text-sm flex items-center gap-2">{editId ? <><Edit className="w-4 h-4 text-blue-500"/> อัปเดตข้อมูล</> : <><Plus className="w-4 h-4 text-emerald-500"/> เพิ่มข้อมูลใหม่</>}</h2>
+                  <button onClick={closeModal}><X className="w-5 h-5 text-gray-400 hover:text-gray-800" /></button>
+                </div>
+                <div className="p-5 overflow-y-auto custom-scrollbar text-xs">
+                  {validationError && (
+                    <div className="mb-4 p-3 bg-red-50 text-red-700 rounded-lg flex items-center gap-2 font-bold border border-red-200 shadow-sm">
+                      <AlertCircle className="w-5 h-5 shrink-0" /> <span className="flex-1 text-sm">{validationError}</span>
+                    </div>
+                  )}
+                  <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                    <div className="space-y-1">
+                      <label className="font-bold text-gray-500 text-[10px] uppercase tracking-wider">Eq No. *</label>
+                      <input type="text" name="equipmentNo" value={formData.equipmentNo} onChange={handleInput} 
+                        className={`w-full border rounded-lg p-2.5 focus:ring-2 focus:ring-blue-100 focus:border-blue-400 outline-none font-black text-black transition-all ${missingFields.includes('equipmentNo') ? 'border-red-500 bg-red-50 ring-2 ring-red-100 animate-shake' : 'bg-gray-50'}`} />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="font-bold text-gray-500 text-[10px] uppercase tracking-wider">Date *</label>
+                      <input type="date" name="inspectionDate" value={formData.inspectionDate} onChange={handleInput} 
+                        className={`w-full border rounded-lg p-2.5 focus:ring-2 focus:ring-blue-100 focus:border-blue-400 outline-none transition-all ${missingFields.includes('inspectionDate') ? 'border-red-500 bg-red-50 ring-2 ring-red-100 animate-shake' : 'bg-white'}`} />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="font-bold text-gray-500 text-[10px] uppercase tracking-wider">Inspector *</label>
+                      <select name="inspectorName" value={formData.inspectorName} onChange={handleInput} 
+                        className={`w-full border rounded-lg p-2.5 focus:ring-2 focus:ring-blue-100 focus:border-blue-400 outline-none transition-all ${missingFields.includes('inspectorName') ? 'border-red-500 bg-red-50 ring-2 ring-red-100 animate-shake' : 'bg-white'}`}>
+                        <option value="">-- เลือก --</option>
+                        {inspectorsData.map(o => <option key={o.name} value={o.name}>{o.name}</option>)}
+                      </select>
+                    </div>
+                    <div className="space-y-1">
+                      <label className="font-bold text-gray-500 text-[10px] uppercase tracking-wider">Product *</label>
+                      {(() => { 
+                        const selInsp = inspectorsData.find(i => i.name === formData.inspectorName); 
+                        const availablePLs = selInsp ? selInsp.certs : PRODUCT_LINES;
+                        return (
+                          <select name="productLine" value={formData.productLine} onChange={handleInput} 
+                            className={`w-full border rounded-lg p-2.5 focus:ring-2 focus:ring-blue-100 focus:border-blue-400 outline-none transition-all ${missingFields.includes('productLine') ? 'border-red-500 bg-red-50 ring-2 ring-red-100 animate-shake' : 'bg-white'}`}>
+                            <option value="">-- เลือก --</option>
+                            {availablePLs.map(o => <option key={o} value={o}>{o}</option>)}
+                          </select>
+                        );
+                      })()}
+                    </div>
+                    <div className="space-y-1">
+                      <label className="font-bold text-gray-500 text-[10px] uppercase tracking-wider">Type *</label>
+                      <select name="type" value={formData.type} onChange={handleInput} 
+                        className={`w-full border rounded-lg p-2.5 focus:ring-2 focus:ring-blue-100 focus:border-blue-400 outline-none transition-all 
+                          ${missingFields.includes('type') ? 'border-red-500 bg-red-50 ring-2 ring-red-100 animate-shake' : 
+                            formData.type === 'NI CNX' ? 'text-emerald-700 font-bold bg-emerald-50 border-emerald-200' : 
+                            formData.type === 'NI HKT' ? 'text-pink-700 font-bold bg-pink-50 border-pink-200' : 'bg-white'}`}>
+                        <option value="" className="text-gray-800 bg-white">-- เลือก --</option>
+                        {TYPES.map(o => <option key={o} value={o} className={o === 'NI CNX' ? 'text-emerald-600 font-bold bg-white' : o === 'NI HKT' ? 'text-pink-600 font-bold bg-white' : 'text-gray-800 bg-white'}>{o}</option>)}
+                      </select>
+                    </div>
+                    <div className="space-y-1 col-span-2">
+                      <label className="font-bold text-gray-500 text-[10px] uppercase tracking-wider">Site *</label>
+                      <input type="text" name="jobSite" value={formData.jobSite} onChange={handleInput} 
+                        className={`w-full border rounded-lg p-2.5 focus:ring-2 focus:ring-blue-100 focus:border-blue-400 outline-none transition-all ${missingFields.includes('jobSite') ? 'border-red-500 bg-red-50 ring-2 ring-red-100 animate-shake' : 'bg-gray-50'}`} />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="font-bold text-gray-500 text-[10px] uppercase tracking-wider">Unit *</label>
+                      <div className="flex flex-col gap-2">
+                         <select 
+                            value={STANDARD_UNITS.includes(formData.unit) ? formData.unit : (formData.unit ? 'OTHER' : '')} 
+                            onChange={(e) => {
+                               if(e.target.value === 'OTHER') { handleInput({ target: { name: 'unit', value: ' ' } }); } 
+                               else { handleInput({ target: { name: 'unit', value: e.target.value } }); }
+                            }}
+                            className={`w-full border rounded-lg p-2.5 focus:ring-2 focus:ring-blue-100 focus:border-blue-400 outline-none transition-all ${missingFields.includes('unit') ? 'border-red-500 bg-red-50 ring-2 ring-red-100 animate-shake' : 'bg-white'}`}
+                         >
+                            <option value="">-- เลือก --</option>
+                            {STANDARD_UNITS.map(u => <option key={u} value={u}>{u}</option>)}
+                            <option value="OTHER">อื่นๆ (พิมพ์เอง)</option>
+                         </select>
+                         {(!STANDARD_UNITS.includes(formData.unit) && formData.unit !== '') && (
+                            <input type="text" name="unit" value={formData.unit.trim()} onChange={handleInput} placeholder="พิมพ์ Unit ที่นี่..." 
+                              className={`w-full border rounded-lg p-2 focus:ring-2 focus:ring-blue-100 outline-none fade-in bg-blue-50 transition-all ${missingFields.includes('unit') ? 'border-red-500 bg-red-50 ring-2 ring-red-100 animate-shake' : 'border-blue-300'}`} />
+                         )}
+                      </div>
+                    </div>
+                    
+                    <div className="col-span-2 lg:col-span-4 border-t border-dashed my-2"></div>
+                    
+                    <div className="space-y-1 col-span-2 lg:col-span-1">
+                      <label className="font-black text-blue-700 text-[10px] uppercase tracking-wider bg-blue-100 px-2 py-0.5 rounded">Status</label>
+                      <select name="saisStatus" value={formData.saisStatus} onChange={handleInput} className="w-full border-2 border-blue-300 bg-blue-50 rounded-lg p-2.5 font-bold text-blue-800 outline-none focus:ring-2 focus:ring-blue-200 mt-1 shadow-sm">
+                        <option value="">-- PENDING --</option>
+                        {SAIS_STATUSES.map(o => <option key={o} value={o}>{o}</option>)}
+                      </select>
+                    </div>
+                    <div className="space-y-1">
+                      <label className="font-bold text-gray-500 text-[10px] uppercase tracking-wider">Condition</label>
+                      <select name="condition" value={formData.condition} onChange={handleInput} 
+                        className={`w-full border rounded-lg p-2.5 outline-none transition-all mt-1 
+                          ${formData.condition === 'TEMPORARY POWER SUPPLY' ? 'text-yellow-700 font-bold bg-yellow-50 border-yellow-200' : 
+                            formData.condition === 'BUILDER LIFT' ? 'text-orange-700 font-bold bg-orange-50 border-orange-200' : 
+                            'bg-white border-gray-300 text-gray-800'}`}>
+                        <option value="" className="text-gray-800 bg-white">-- เลือก --</option>
+                        {CONDITIONS.map(o => <option key={o} value={o} className={o === 'TEMPORARY POWER SUPPLY' ? 'text-yellow-600 font-bold bg-white' : o === 'BUILDER LIFT' ? 'text-orange-600 font-bold bg-white' : 'text-gray-800 bg-white'}>{o}</option>)}
+                      </select>
+                    </div>
+                    <div className="space-y-1">
+                      <label className="font-bold text-gray-500 text-[10px] uppercase tracking-wider">Gen Date</label>
+                      <input type="date" name="generatedDate" value={formData.generatedDate} onChange={handleInput} className="w-full border rounded-lg p-2.5 outline-none mt-1 bg-white" />
+                    </div>
+                    <div className="grid grid-cols-3 gap-2 col-span-2 lg:col-span-1">
+                      <div>
+                        <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Sys</label>
+                        <select name="generatedInSystem" value={formData.generatedInSystem} onChange={handleInput} className="w-full border rounded-lg p-2 outline-none mt-1 bg-white"><option value="">-</option><option value="YES">YES</option></select>
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Pre</label>
+                        <select name="preCheck" value={formData.preCheck} onChange={handleInput} 
+                          className={`w-full border rounded-lg p-2 outline-none transition-all mt-1 
+                            ${formData.preCheck === 'NO' ? 'text-red-700 font-bold bg-red-50 border-red-200' : 'bg-white border-gray-300 text-gray-800'}`}>
+                          <option value="" className="text-gray-800 bg-white">-</option>
+                          <option value="OK" className="text-gray-800 bg-white">OK</option>
+                          <option value="NO" className="text-red-600 font-bold bg-white">NO</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Buz</label>
+                        <select name="buzzer" value={formData.buzzer} onChange={handleInput} 
+                          className={`w-full border rounded-lg p-2 outline-none transition-all mt-1 
+                            ${formData.buzzer === 'NO' ? 'text-red-700 font-bold bg-red-50 border-red-200' : 'bg-white border-gray-300 text-gray-800'}`}>
+                          <option value="" className="text-gray-800 bg-white">-</option>
+                          <option value="YES" className="text-gray-800 bg-white">YES</option>
+                          <option value="NO" className="text-red-600 font-bold bg-white">NO</option>
+                          <option value="N/A" className="text-gray-800 bg-white">N/A</option>
+                        </select>
+                      </div>
+                    </div>
+                    
+                    <div className="col-span-2 lg:col-span-4 bg-gray-50 p-4 rounded-xl border border-gray-200 mt-2">
+                      <label className="font-bold text-gray-800 flex gap-2 mb-3"><MessageSquare className="w-4 h-4 text-blue-500" /> ประวัติคอมเมนต์</label>
+                      <div className="space-y-2 mb-3 max-h-32 overflow-y-auto custom-scrollbar">
+                        {(() => { 
+                          const h = parseRemarkHistory(formData.remark); 
+                          if (!h.length || !h[0].text) return <div className="text-gray-400 py-2 text-center bg-white border border-dashed rounded-lg">ไม่มีคอมเมนต์</div>; 
+                          return h.map((x, i) => (
+                            <div key={i} className="bg-white p-2.5 rounded-lg border border-gray-100 shadow-sm">
+                              <div className="flex justify-between mb-1"><span className="text-[10px] text-gray-400 font-medium">{x.date}</span><span className="text-[10px] font-bold text-blue-700 bg-blue-50 px-1.5 rounded">{x.author}</span></div>
+                              <p className="text-[11px] text-gray-700">{x.text}</p>
+                            </div>
+                          ));
+                        })()}
+                      </div>
+                      <input type="text" name="newRemark" value={formData.newRemark || ''} onChange={handleInput} className="w-full border border-gray-300 rounded-lg p-3 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all text-sm" placeholder="เพิ่มข้อความอัปเดตสถานะ/คอมเมนต์ใหม่..." />
+                    </div>
+                  </div>
+                </div>
+                <div className="bg-white p-4 border-t flex justify-between shrink-0 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
+                  {editId ? <button onClick={() => handleDelete(editId)} disabled={isSubmitting} className="px-4 py-2 rounded-lg font-bold text-red-600 bg-red-50 hover:bg-red-100 transition-colors flex items-center gap-1.5 disabled:opacity-50"><Trash2 className="w-4 h-4" /> ลบ</button> : <div></div>}
+                  <div className="flex gap-3">
+                    <button onClick={closeModal} className="px-5 py-2 rounded-lg font-bold text-gray-600 bg-gray-100 hover:bg-gray-200 transition-colors">ยกเลิก</button>
+                    <button onClick={handleSubmit} disabled={isSubmitting} className="px-6 py-2 rounded-lg font-bold bg-[#E20015] hover:bg-red-700 text-white flex items-center gap-2 disabled:bg-red-300 shadow-md transition-all">{isSubmitting ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />} บันทึก</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* View Record Modal */}
+          {viewRecord && (
+            <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex justify-center items-end sm:items-center sm:p-4 fade-in">
+              <div className="bg-white w-full sm:rounded-2xl sm:max-w-2xl max-h-[90vh] flex flex-col slide-up overflow-hidden">
+                <div className="bg-gray-50 p-4 border-b flex justify-between items-center shrink-0">
+                  <div className="flex items-center gap-2 font-black text-sm"><Eye className="w-5 h-5 text-blue-600" /> ข้อมูลรายละเอียดงาน</div>
+                  <button onClick={closeViewModal}><X className="w-5 h-5 text-gray-400 hover:text-gray-800" /></button>
+                </div>
+                <div className="p-5 overflow-y-auto custom-scrollbar text-xs bg-white">
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-5">
+                    <div><span className="text-[10px] text-gray-400 font-bold block tracking-wider uppercase mb-1">Insp. Date</span><span className="font-bold text-gray-800 text-sm">{formatDateToDDMMYY(viewRecord.inspectionDate)}</span></div>
+                    <div><span className="text-[10px] text-gray-400 font-bold block tracking-wider uppercase mb-1">Eq. No.</span><span className="text-lg font-black text-black">{viewRecord.equipmentNo}</span></div>
+                    <div><span className="text-[10px] text-gray-400 font-bold block tracking-wider uppercase mb-1">Inspector</span><span className="font-bold text-gray-800">{viewRecord.inspectorName}</span></div>
+                    <div><span className="text-[10px] text-gray-400 font-bold block tracking-wider uppercase mb-1">Product</span><span className="bg-gray-100 px-2.5 py-1 rounded-md font-bold text-gray-700 border">{viewRecord.productLine}</span></div>
+                    <div>
+                      <span className="text-[10px] text-gray-400 font-bold block tracking-wider uppercase mb-1">Type</span>
+                      <span className={`px-2.5 py-1 rounded-md font-bold border ${viewRecord.type === 'NI CNX' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : viewRecord.type === 'NI HKT' ? 'bg-pink-50 text-pink-700 border-pink-200' : 'bg-gray-50 text-gray-700 border-gray-200'}`}>
+                         {viewRecord.type}
+                      </span>
+                    </div>
+                    <div><span className="text-[10px] text-gray-400 font-bold block tracking-wider uppercase mb-1">Unit</span><span className="font-bold text-gray-800">{viewRecord.unit}</span></div>
+                    <div className="col-span-2 md:col-span-3"><span className="text-[10px] text-gray-400 font-bold block tracking-wider uppercase mb-1">Job Site</span><span className="bg-gray-50 p-3 rounded-lg block font-bold border border-gray-200 text-sm">{viewRecord.jobSite}</span></div>
+                  </div>
+                  
+                  <div className="border-t border-dashed my-5"></div>
+                  
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-5 mb-5">
+                    <div>
+                      <span className="text-[10px] text-gray-400 font-bold block tracking-wider uppercase mb-2">Status</span>
+                      <span className={`px-3 py-1.5 rounded-lg text-[11px] font-black border tracking-wide ${viewRecord.saisStatus === 'Passed with Completed' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : viewRecord.saisStatus === 'Failed' ? 'bg-red-50 text-red-700 border-red-200' : viewRecord.saisStatus === 'Passed with OIL' ? 'bg-amber-50 text-amber-700 border-amber-200' : 'bg-blue-50 text-blue-700 border-blue-200'}`}>{viewRecord.saisStatus || 'PENDING'}</span>
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-gray-400 font-bold block tracking-wider uppercase mb-2">Condition</span>
+                      <span className={`font-bold ${viewRecord.condition === 'TEMPORARY POWER SUPPLY' ? 'text-yellow-600' : viewRecord.condition === 'BUILDER LIFT' ? 'text-orange-600' : 'text-gray-800'}`}>
+                        {viewRecord.condition || '-'}
+                      </span>
+                    </div>
+                    <div><span className="text-[10px] text-gray-400 font-bold block tracking-wider uppercase mb-2">Gen. Date</span><span className="font-bold text-gray-800">{formatDateToDDMMYY(viewRecord.generatedDate)}</span></div>
+                    <div className="col-span-2 md:col-span-3">
+                      <span className="text-[10px] text-gray-400 font-bold block tracking-wider uppercase mb-2">Sys / Pre / Buz</span>
+                      <div className="flex gap-4">
+                          <span className="bg-gray-50 px-3 py-1 rounded border font-bold text-gray-700">{viewRecord.generatedInSystem || '-'}</span>
+                          <span className={`px-3 py-1 rounded border font-bold ${viewRecord.preCheck === 'NO' ? 'bg-red-50 text-red-600 border-red-200' : 'bg-gray-50 text-gray-700 border-gray-200'}`}>{viewRecord.preCheck || '-'}</span>
+                          <span className={`px-3 py-1 rounded border font-bold ${viewRecord.buzzer === 'NO' ? 'bg-red-50 text-red-600 border-red-200' : 'bg-gray-50 text-gray-700 border-gray-200'}`}>{viewRecord.buzzer || '-'}</span>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div className="bg-gray-50 p-4 rounded-xl border border-gray-200">
+                    <span className="text-[11px] font-bold text-gray-700 block mb-3 flex items-center gap-1.5"><MessageSquare className="w-4 h-4 text-blue-500" /> ประวัติคอมเมนต์</span>
+                    <div className="max-h-40 overflow-y-auto custom-scrollbar pr-2 space-y-2">
+                      {(() => { 
+                        const h = parseRemarkHistory(viewRecord.remark); 
+                        if (!h.length || !h[0].text) return <div className="text-gray-400 text-center py-4 bg-white border border-dashed rounded-lg">ไม่มีประวัติคอมเมนต์</div>; 
+                        return h.map((x, i) => (
+                          <div key={i} className="bg-white p-3 rounded-lg border border-gray-100 shadow-sm relative">
+                            <div className="flex justify-between mb-1.5">
+                                <span className="text-[10px] text-gray-400 font-medium">{x.date}</span>
+                                <span className="text-[10px] font-bold text-blue-700 bg-blue-50 px-1.5 py-0.5 rounded">{x.author}</span>
+                            </div>
+                            <p className="text-[11px] text-gray-700 leading-relaxed">{x.text}</p>
+                          </div>
+                        ));
+                      })()}
+                    </div>
+                  </div>
+                </div>
+                <div className="bg-white p-4 border-t flex justify-end gap-3 shrink-0 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
+                  <button onClick={closeViewModal} className="px-5 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg font-bold transition-colors">ปิด</button>
+                  <button onClick={() => { closeViewModal(); openEditModal(viewRecord); }} className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-bold flex items-center gap-2 shadow-md transition-colors"><Edit className="w-4 h-4" /> แก้ไข</button>
+                </div>
+              </div>
+            </div>
+          )}
+
+        </div>
+      );
+    }
+    
+    // 🔥 Wrap ด้วย ErrorBoundary
+    const container = document.getElementById('root');
+    const root = createRoot(container);
+    root.render(<ErrorBoundary><App /></ErrorBoundary>);
+  </script>
+</body>
+</html>
