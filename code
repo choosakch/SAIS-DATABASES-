@@ -1,0 +1,173 @@
+﻿ https://script.google.com/macros/s/AKfycbw6qVBH1vCdNVOXMwirdfR9AVQoBmsmF3hKBytnl-wrkk1oaRWBEzPwqo1QmOV9Owua/exec
+// ตั้งค่า ID ของชีต
+const SHEET_ID = '1atJNCmYOUwl0MwtJ1YEe4Ey2tojtrMPPvmVV66TrxnA'; 
+const HISTORY_SHEET_NAME = 'History_Log'; 
+const INSPECTORS_SHEET_NAME = 'Inspectors'; 
+
+// ฟังก์ชันสำหรับค้นหาชีตทั้งหมดที่ขึ้นต้นด้วยคำว่า "Records"
+function getRecordsSheets(ss) {
+  return ss.getSheets().filter(sheet => sheet.getName().startsWith('Records'));
+}
+
+function doGet(e) {
+  const ss = SpreadsheetApp.openById(SHEET_ID);
+  
+  // 1. ดึงข้อมูล Records หลัก (กวาดข้อมูลจากทุกชีตที่ชื่อขึ้นต้นด้วย Records)
+  let allRecords = [];
+  const recordSheets = getRecordsSheets(ss);
+  
+  recordSheets.forEach(sheet => {
+    const data = sheet.getDataRange().getValues();
+    if (data.length > 1) { // ถ้ามีข้อมูลมากกว่า 1 บรรทัด (ไม่นับ Header)
+      const headers = data[0];
+      const rows = data.slice(1);
+      const sheetRecords = rows.map(row => {
+        let obj = {};
+        headers.forEach((header, index) => {
+          obj[header] = row[index];
+        });
+        return obj;
+      });
+      allRecords = allRecords.concat(sheetRecords);
+    }
+  });
+
+  // 2. ดึงข้อมูล Inspectors (ตั้งค่าออนไลน์)
+  let inspectors = [];
+  const inspSheet = ss.getSheetByName(INSPECTORS_SHEET_NAME);
+  if (inspSheet) {
+    const inspData = inspSheet.getDataRange().getValues();
+    if (inspData.length > 1) {
+      const inspHeaders = inspData[0];
+      const inspRows = inspData.slice(1);
+      inspectors = inspRows.map(row => {
+        let obj = {};
+        inspHeaders.forEach((header, index) => {
+          obj[header] = row[index];
+        });
+        return obj;
+      });
+    }
+  }
+  
+  return ContentService.createTextOutput(JSON.stringify({ records: allRecords, inspectors: inspectors }))
+    .setMimeType(ContentService.MimeType.JSON);
+}
+
+function doPost(e) {
+  try {
+    const ss = SpreadsheetApp.openById(SHEET_ID);
+    const payload = JSON.parse(e.postData.contents);
+    const action = payload.action || 'SAVE';
+    const currentTimestamp = new Date().toISOString();
+
+    // โหมดบันทึกการตั้งค่ารายชื่อออนไลน์
+    if (action === 'SAVE_SETTINGS') {
+       const inspSheet = ss.getSheetByName(INSPECTORS_SHEET_NAME);
+       if (!inspSheet) throw new Error("ไม่พบชีต 'Inspectors' ใน Google Sheets");
+       
+       if (inspSheet.getLastRow() > 1) {
+         inspSheet.getRange(2, 1, inspSheet.getLastRow() - 1, 2).clearContent();
+       }
+       
+       const inspectors = payload.inspectors;
+       if (inspectors && inspectors.length > 0) {
+         const newRows = inspectors.map(insp => [insp.name, JSON.stringify(insp.certs)]);
+         inspSheet.getRange(2, 1, newRows.length, 2).setValues(newRows);
+       }
+       return ContentService.createTextOutput(JSON.stringify({ status: "success" })).setMimeType(ContentService.MimeType.JSON);
+    }
+
+    // เตรียมชีต History
+    const historySheet = ss.getSheetByName(HISTORY_SHEET_NAME);
+    const historyHeaders = historySheet.getDataRange().getValues()[0];
+    const recordSheets = getRecordsSheets(ss);
+
+    // โหมดลบข้อมูล
+    if (action === 'DELETE') {
+      const deleteId = payload.id;
+      let deleted = false;
+      
+      // วนหา ID จากทุกชีต Records เพื่อลบ
+      for (let sheet of recordSheets) {
+        const data = sheet.getDataRange().getValues();
+        for (let i = 1; i < data.length; i++) {
+          if (data[i][0] == deleteId) {
+            sheet.deleteRow(i + 1);
+            deleted = true;
+            break;
+          }
+        }
+        if (deleted) break;
+      }
+      
+      if (deleted) {
+        const deleteLog = new Array(historyHeaders.length).fill('');
+        deleteLog[0] = deleteId; 
+        deleteLog[historyHeaders.length - 2] = 'DELETED'; 
+        deleteLog[historyHeaders.length - 1] = currentTimestamp; 
+        historySheet.appendRow(deleteLog);
+      }
+    } 
+    // โหมดบันทึก / อัปเดต ข้อมูลงาน
+    else if (action === 'SAVE') {
+      const rec = payload.record;
+      if (!rec.equipmentNo || !rec.inspectionDate || !rec.inspectorName || !rec.productLine || !rec.type || !rec.jobSite) {
+        throw new Error("ข้อมูลสำคัญไม่ครบถ้วน (Backend Validation Failed)");
+      }
+
+      // ดึง "ปี" จากวันที่ตรวจ เพื่อหาว่าจะต้องบันทึกลงชีตไหน
+      const inspDateObj = new Date(rec.inspectionDate);
+      const targetYear = inspDateObj.getFullYear();
+      const targetSheetName = `Records ${targetYear}`;
+      const targetSheet = ss.getSheetByName(targetSheetName);
+
+      if (!targetSheet) {
+         throw new Error(`ไม่พบชีต '${targetSheetName}' กรุณาสร้างชีตนี้เตรียมไว้ใน Google Sheets ก่อนบันทึกข้อมูลของปี ${targetYear}`);
+      }
+
+      rec.savedAt = currentTimestamp;
+      const historyRowData = historyHeaders.map(header => rec[header] || '');
+      historySheet.appendRow(historyRowData);
+
+      let oldSheet = null;
+      let oldRowIndex = -1;
+      let masterHeaders = targetSheet.getDataRange().getValues()[0]; // ใช้ Header ของชีตปีเป้าหมาย
+
+      // ค้นหาว่าข้อมูลนี้เคยบันทึกไว้ในชีตไหนหรือยัง (สำหรับการ Update)
+      for (let sheet of recordSheets) {
+        const data = sheet.getDataRange().getValues();
+        for (let i = 1; i < data.length; i++) {
+          if (data[i][0] == rec.id) {
+            oldSheet = sheet;
+            oldRowIndex = i + 1;
+            break;
+          }
+        }
+        if (oldSheet) break;
+      }
+
+      const masterRowData = masterHeaders.map(header => rec[header] || '');
+
+      // หากเป็นการอัปเดตข้อมูล
+      if (oldSheet) {
+        // ถ้าย้ายปี (เช่น แก้ปีจาก 2026 เป็น 2027) ให้ลบข้อมูลจากชีตปีเก่า แล้วไปเพิ่มบรรทัดใหม่ในชีตปีใหม่
+        if (oldSheet.getName() !== targetSheetName) {
+           oldSheet.deleteRow(oldRowIndex);
+           targetSheet.appendRow(masterRowData);
+        } else {
+           // ถ้าอยู่ปีเดิม เขียนทับบรรทัดเดิมได้เลย
+           oldSheet.getRange(oldRowIndex, 1, 1, masterRowData.length).setValues([masterRowData]);
+        }
+      } else {
+        // หากเป็นข้อมูลใหม่
+        targetSheet.appendRow(masterRowData);
+      }
+    }
+
+    return ContentService.createTextOutput(JSON.stringify({ status: "success" })).setMimeType(ContentService.MimeType.JSON);
+      
+  } catch (error) {
+    return ContentService.createTextOutput(JSON.stringify({ status: "error", message: error.toString() })).setMimeType(ContentService.MimeType.JSON);
+  }
+}
